@@ -89,7 +89,9 @@ fx <- read_snb(raw(f_fx)) |>
 # Also contains Fed (UG1, OG1), ECB (H, SRF, EF), BoE (L0) and BoJ (L1) rates.
 f_policy <- "snb_policy_rates_snboffzisa.csv"
 if (needs_download(f_policy)) {
-  download_raw(snb_url("snboffzisa", from = "2000-01"), raw(f_policy), "SNB snboffzisa")
+  download_raw(snb_url("snboffzisa", from = "2000-01",
+                       dim_sel = "D0(LZ,UG0,OG0,UG1,OG1,H,SRF,EF,L0,L1)"),
+               raw(f_policy), "SNB snboffzisa")
 }
 
 policy_rates <- read_snb(raw(f_policy)) |>
