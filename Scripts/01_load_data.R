@@ -27,6 +27,8 @@ needs_download <- function(file) refresh_raw || !file.exists(raw(file))
 # Monthly, not seasonally adjusted. Includes the aggregates we need for the
 # blocks: petroleum products (112_101), housing rental (113_101), domestic
 # (1819_118) and imported products (1819_119).
+# The file only holds the weights of the current year (2026), so we do not
+# keep them here: the weights of every year are read in part 2.
 f_cpi <- "bfs_cpi_LIK25B25.xlsx"
 if (needs_download(f_cpi)) {
   download_raw(bfs_latest("su-d-05.02.66"), raw(f_cpi), "BFS su-d-05.02.66")
@@ -38,7 +40,6 @@ cpi_index <- read_excel(raw(f_cpi), sheet = "INDEX_m", skip = 3,
   distinct(Code, .keep_all = TRUE) |>            # Total and main groups are repeated
                                                  # above the special aggregates
   select(code = 1, pos_no = 2, level = 4, coicop = 5, item = 13,
-         weight = 14,                            # weight of the current year
          matches("^[0-9]{5}$")) |>               # monthly columns (Excel dates)
   mutate(across(matches("^[0-9]{5}$"), as.numeric)) |>  # footnote text made some columns character
   pivot_longer(matches("^[0-9]{5}$"), names_to = "date", values_to = "index") |>
@@ -48,12 +49,22 @@ cpi_index <- read_excel(raw(f_cpi), sheet = "INDEX_m", skip = 3,
 
 # 2. Swiss CPI, weights of every basket since 1914 -------------------------
 # BFS, LIK detailed weights of the original baskets [GEWICHTUNGEN],
-# BFS number su-d-05.02.90. One sheet per basket with different layouts,
-# so it is read in 02_clean_data.R when we build the block weights.
+# BFS number su-d-05.02.90. One sheet per basket (see read_cpi_weights()).
+# Weights in % of the total. Until 1993 one weight per basket, valid until
+# the next basket; since 2000 one weight per year. Codes (e.g. "1819_119",
+# as in cpi_index) exist only from basket 2015 (years 2016+); older baskets
+# are identified by pos_no and item, and their numbering differs by basket.
+# The sheet LIK20->LIK25 maps the 2020 basket to the 2025 one and holds no
+# new weights, so it is skipped.
 f_cpi_w <- "bfs_cpi_weights.xlsx"
 if (needs_download(f_cpi_w)) {
   download_raw(bfs_latest("su-d-05.02.90"), raw(f_cpi_w), "BFS su-d-05.02.90")
 }
+
+cpi_weights <- excel_sheets(raw(f_cpi_w)) |>
+  setdiff("LIK20->LIK25") |>
+  map(\(s) read_cpi_weights(raw(f_cpi_w), s)) |>
+  list_rbind()
 
 
 # 3. Swiss GDP, quarterly -------------------------------------------------
@@ -181,5 +192,5 @@ reference_rate <- read_excel(raw(f_bwo), col_types = "text") |>
   arrange(valid_from)
 
 
-message("01_load_data.R done: cpi_index, gdp, fx, policy_rates, brent, hicp_ea, ",
-        "unemployed, reference_rate")
+message("01_load_data.R done: cpi_index, cpi_weights, gdp, fx, policy_rates, brent, ",
+        "hicp_ea, unemployed, reference_rate")
