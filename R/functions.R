@@ -84,3 +84,47 @@ read_seco_q <- function(path, sheet) {
     dplyr::mutate(date = lubridate::make_date(year, 3 * quarter - 2, 1),
                   concept = sheet, .before = 1)
 }
+
+# BFS CPI weights workbook: one sheet per basket (LIK1914, ..., LIK2025), all
+# with column headers in row 4 but different layouts:
+# - until LIK1993 one weight per basket ("Weight" or "Gewichte / Poids"),
+#   valid from the basket year until the next basket;
+# - from LIK2000 one column per year ("2000/01", "2002", ...), because the
+#   BFS updates the weights every year. "2000/01" covers 2000 and 2001;
+#   empty future columns (2027-2030) are dropped.
+# Only LIK2015 and later have the Code column (e.g. "1819_119") used in the
+# index file; older baskets are identified by PosNo only. The German item
+# name sits in a different column depending on its level, so we take the
+# first non-empty one.
+read_cpi_weights <- function(path, sheet) {
+  x <- readxl::read_excel(path, sheet = sheet, col_names = FALSE, col_types = "text",
+                          na = c("", "…"),      # "…" = not available
+                          .name_repair = "minimal")
+  hdr  <- as.character(unlist(x[4, ]))
+  body <- x[-(1:4), ]
+  col  <- function(names) which(hdr %in% names)[1]
+
+  name_de <- col(c("PosNameDE", "PosName_DE", "PosTxt_D"))
+  name_fr <- col(c("PosNameFR", "PosName_FR", "Position_F"))
+  w_cols  <- which(grepl("^(19|20)[0-9]{2}", hdr) | hdr %in% c("Weight", "Gewichte / Poids"))
+  basket  <- as.integer(stringr::str_extract(sheet, "[0-9]{4}"))
+
+  items <- tibble::tibble(
+    basket = basket,
+    code   = if (is.na(col("Code"))) NA_character_ else body[[col("Code")]],
+    pos_no = suppressWarnings(as.numeric(body[[col("PosNo")]])),
+    level  = if (is.na(col(c("PosLevel", "Level")))) NA_real_
+             else as.numeric(body[[col(c("PosLevel", "Level"))]]),
+    item   = apply(body[, name_de:(name_fr - 1)], 1, function(v) v[!is.na(v)][1]))
+
+  weights <- lapply(w_cols, function(j) {
+    years <- if (grepl("^(19|20)[0-9]{2}", hdr[j])) as.integer(substr(hdr[j], 1, 4)) else basket
+    if (hdr[j] == "2000/01") years <- 2000:2001
+    tidyr::expand_grid(dplyr::mutate(items, weight = as.numeric(body[[j]])), year = years)
+  })
+  dplyr::bind_rows(weights) |>
+    dplyr::filter(!is.na(pos_no), !is.na(weight)) |>     # drop footnotes and empty years
+    dplyr::distinct() |>                       # Total and main groups are repeated
+                                               # above the special aggregates
+    dplyr::relocate(year, .after = basket)
+}
