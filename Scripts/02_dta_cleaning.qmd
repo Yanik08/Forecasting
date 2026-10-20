@@ -1,7 +1,399 @@
 ---
-title: "Data_Cleaning"
+title: "Data_Cleaning_and_Preprocessing"
 format: html
 editor: visual
 ---
 
-# Preliminary analysis
+# Data Cleaning and preprocessing
+
+```{r setup}
+source(here::here("Scripts", "01_load_data.R"))
+
+# Folder for the cleaned series
+clean_dir <- here::here("DTA_CLEAN")
+dir.create(clean_dir, showWarnings = FALSE)
+```
+
+In this quarto doc. we will be cleaning each data separately and turning them each into quartlery data.
+
+We will be looking at each data one by one, cleaning and turning into quarterly data all at once
+
+Before anything, we want to look at how the data is organised:
+
+```{r}
+# See the column names of each dataset
+names(brent)
+names(reference_rate)
+
+# See the last rows of each dataset
+tail(brent)
+tail(cpi_index)
+tail(fx)
+tail(gdp)
+tail(hicp_ea)
+tail(policy_rates)
+tail(reference_rate)
+tail(unemployed)
+
+# only "unemploymed" is descending rather than ascending, 
+```
+
+# CPI index
+
+### Clean
+
+```{r}
+# BFS publishes “imported products” and “domestic products”, but not imported excl. oil or domestic excl. rents.
+# we need to construct these on our own : imported - petroleum & domestic - rents
+# (assuming all petroleum products count as imported and all rents as domestic)
+
+
+# w have a problem, the cpi weights do not exist for domestic and imported before 2016, we have to decide what we want to do with the cpi, do we start from 2016 ? what is its purpose in our work ?
+
+# Keep the total and the 4 aggregates needed for the blocks, one column each:
+# total (100_100), petroleum products (112_101), housing rental (113_101),
+# domestic products (1819_118), imported products (1819_119).
+cpi_index_clean <- cpi_index %>%
+  filter(code %in% c("100_100", "112_101", "113_101", "1819_118", "1819_119")) %>%
+  mutate(series = recode(code,
+                         "100_100"  = "cpi_total",
+                         "112_101"  = "cpi_oil",
+                         "113_101"  = "cpi_rent",
+                         "1819_118" = "cpi_domestic",
+                         "1819_119" = "cpi_imported")) %>%
+  select(date, series, index) %>%
+  pivot_wider(names_from = series, values_from = index) %>%
+  arrange(date)
+
+# Check: no missing values, no duplicated or missing months
+cpi_index_clean %>% summarise(from           = min(date),
+                              to             = max(date),
+                              na             = sum(is.na(across(-date))),
+                              duplicates     = sum(duplicated(date)),
+                              missing_months = length(seq(min(date), max(date), by = "month")) - n())
+
+# Save the cleaned series
+write_csv(cpi_index_clean, file.path(clean_dir, "cpi_index_clean.csv"))
+```
+
+# Rents
+
+### Data analysis
+
+Q FOR PROF: different datasets are parted differently, in the sense that some have trimestrial data, some other frequency, and even when the frequency is the same, some do not have the same months. What is the solution? fix one order and adopt for everyone, reporting data from previous months in the case it does not have any?
+
+```{r}
+# Evidence: share of years in which the rent index changes, by calendar month
+cpi_index %>%
+  filter(code == "113_101") %>%
+  arrange(date) %>%
+  mutate(changed = abs(index / lag(index) - 1) > 1e-9,
+         period  = if_else(year(date) < 1993, "1983-1992", "1993-2026")) %>%
+  filter(!is.na(changed)) %>%
+  group_by(period, month = month(date, label = TRUE)) %>%
+  summarise(share_changed = round(mean(changed), 2), .groups = "drop") %>%
+  pivot_wider(names_from = month, values_from = share_changed)
+```
+
+# Policy rates
+
+### Clean
+
+Source: SNB data portal, cube `snboffzisa`, end of month, in %. The SNB changed its monetary policy framework in June 2019: until May 2019 it set a target range for the 3-month CHF Libor (`UG0` = lower, `OG0` = upper bound); since June 2019 it sets the SNB policy rate (`LZ`). We combine both into one Swiss series: the midpoint of the range until May 2019, then `LZ`. There is no overlap, no gap and no jump at the switch (−0.75 % in May and June 2019). The other series in the file (Fed, ECB, BoE, BoJ) are not used.
+
+Note: the midpoint is an approximation of the policy stance when the range was wide (e.g. 0–0.75 % in 2009–2011, midpoint 0.375 %). Values are end of month, while most other series are monthly averages.
+
+```{r}
+# Swiss policy rate: one series for the whole sample.
+# Jan 2000 - May 2019: midpoint of the SNB target range for 3M CHF Libor (UG0 / OG0)
+# June 2019 onwards:   SNB policy rate (LZ)
+policy_rate_clean <- policy_rates %>%
+  filter(series %in% c("LZ", "UG0", "OG0")) %>%
+  pivot_wider(names_from = series, values_from = rate) %>%
+  arrange(date) %>%
+  mutate(policy_rate = coalesce(LZ, (UG0 + OG0) / 2),   # LZ where it exists, else the midpoint
+         source      = if_else(is.na(LZ), "midpoint UG0/OG0", "LZ")) %>%
+  select(date, policy_rate, source)
+
+# Check: no missing values, no duplicated or missing months
+policy_rate_clean %>% summarise(from           = min(date),
+                             to             = max(date),
+                             na             = sum(is.na(policy_rate)),
+                             duplicates     = sum(duplicated(date)),
+                             missing_months = length(seq(min(date), max(date), by = "month")) - n())
+
+# Check: one value per month, no gaps, and no jump at the switch (May -> June 2019)
+policy_rate_clean %>% filter(date >= "2019-04-01", date <= "2019-07-01")
+
+# Save the cleaned series
+write_csv(policy_rate_clean, file.path(clean_dir, "policy_rate_clean.csv"))
+```
+
+# Exchange rates
+
+### Clean
+
+Source: SNB data portal, cube `devkum`, monthly averages, CHF per 1 EUR and per 1 USD (a rise = the franc weakens). Complete, no duplicates or gaps. EUR only exists since Jan 1999, so it is NA before; USD starts in Aug 1987.
+
+Note for later: from Sep 2011 to Jan 2015 the SNB kept EUR/CHF at a minimum of 1.20, so the rate barely moved; its removal in Jan 2015 caused the largest monthly move (−9.1 %). This period may need special treatment in the imported-goods model.
+
+```{r}
+# Exchange rates: one column per currency (CHF per 1 EUR, CHF per 1 USD).
+# EUR is NA before Jan 1999 because the euro did not exist yet: this is not
+# missing data, so the NAs are kept rather than filled.
+fx_clean <- fx %>%
+  pivot_wider(names_from = currency, values_from = chf_per_unit) %>%
+  rename(chf_per_eur = EUR, chf_per_usd = USD) %>%
+  arrange(date)
+
+# Check: no duplicated or missing months; NAs only in EUR before Jan 1999
+fx_clean %>% summarise(from           = min(date),
+                       to             = max(date),
+                       na_eur         = sum(is.na(chf_per_eur)),
+                       na_usd         = sum(is.na(chf_per_usd)),
+                       first_eur      = min(date[!is.na(chf_per_eur)]),
+                       duplicates     = sum(duplicated(date)),
+                       missing_months = length(seq(min(date), max(date), by = "month")) - n())
+
+# Check: EUR starts in Jan 1999, USD has no gaps
+fx_clean %>% summarise(first_eur = min(date[!is.na(chf_per_eur)]),
+                       na_usd    = sum(is.na(chf_per_usd)))
+
+# Save the cleaned series
+write_csv(fx_clean, file.path(clean_dir, "fx_clean.csv"))
+```
+
+# Brent crude oil price
+
+### Clean
+
+```{r}
+# Brent crude oil: USD per barrel, monthly average, as loaded.
+# No cleaning needed; we only sort by date and check completeness.
+brent_clean <- brent %>%
+  arrange(date)
+
+# Check: no missing values, no duplicated or missing months
+brent_clean %>% summarise(from        = min(date),
+                          to          = max(date),
+                          na          = sum(is.na(brent_usd)),
+                          duplicates  = sum(duplicated(date)),
+                          missing_months = length(seq(min(date), max(date), by = "month")) - n())
+
+# Save the cleaned series
+write_csv(brent_clean, file.path(clean_dir, "brent_clean.csv"))
+```
+
+### Preprocess: conversion to CHF
+
+```{r}
+# Brent in CHF: Swiss prices respond to the oil price in francs, so we convert
+# USD per barrel into CHF per barrel with the monthly CHF/USD rate (fx_clean).
+# inner_join keeps only months that exist in both series: CHF/USD starts in
+# Aug 1987, so May-Jul 1987 are dropped (3 months).
+brent_chf <- brent_clean %>%
+  inner_join(fx_clean %>% select(date, chf_per_usd), by = "date") %>%
+  mutate(brent_chf = brent_usd * chf_per_usd) %>%
+  arrange(date)
+
+# Check: first and last months
+brent_chf %>% slice(c(1, n()))
+
+# Save the preprocessed series
+write_csv(brent_chf, file.path(clean_dir, "brent_chf.csv"))
+```
+
+### Turn into quarterly data
+
+```{r}
+# brent_q <- brent_chf %>%
+  
+  
+```
+
+# Euro area HICP
+
+### Clean
+
+Source: Eurostat `prc_hicp_minr`, euro area (`EA`, changing composition), index 2025 = 100, monthly, not seasonally adjusted. `TOTAL` = all items (Jan 1996 – Sep 2026), `TOT_X_NRG` = all items excluding energy (published from Dec 1999 only). Complete, no duplicates or gaps; the 2025 average equals 100 for both series.
+
+Notes: strong seasonality (January sales: −0.7 % on average, March +1.1 %), so growth rates must be y/y or seasonally adjusted. For the imported-goods block (excl. oil), `TOT_X_NRG` is the better driver since energy is covered by the oil block.
+
+```{r}
+# Euro area HICP: one column per series (index 2025 = 100).
+# TOTAL = all items, TOT_X_NRG = all items excluding energy.
+# TOT_X_NRG is NA before Dec 1999 because Eurostat only publishes it from then:
+# the NAs are kept rather than filled.
+hicp_ea_clean <- hicp_ea %>%
+  pivot_wider(names_from = coicop18, values_from = index) %>%
+  rename(hicp_ea_total = TOTAL, hicp_ea_x_energy = TOT_X_NRG) %>%
+  arrange(date)
+
+# Check: no duplicated or missing months; NAs only in TOT_X_NRG before Dec 1999
+hicp_ea_clean %>% summarise(from             = min(date),
+                            to               = max(date),
+                            na_total         = sum(is.na(hicp_ea_total)),
+                            na_x_energy      = sum(is.na(hicp_ea_x_energy)),
+                            first_x_energy   = min(date[!is.na(hicp_ea_x_energy)]),
+                            duplicates       = sum(duplicated(date)),
+                            missing_months   = length(seq(min(date), max(date), by = "month")) - n())
+
+# Save the cleaned series
+write_csv(hicp_ea_clean, file.path(clean_dir, "hicp_ea_clean.csv"))
+```
+
+# Unemployment
+
+### Clean
+
+Source: BFS (from SECO), registered unemployed by canton, monthly, Jan 1973 – May 2026, number of persons (not a rate), not seasonally adjusted. We keep the Swiss total; the regions and cantons add up to it exactly. The Swiss total is complete and every value has status "A" (normal value). The flags M, Q, R and B only concern single cantons.
+
+Notes from the BFS metadata:
+
+- **The dataset is no longer updated** (last month May 2026); newer data are published by SECO. The series therefore ends earlier than the other monthly series.
+- **Dec 2025 / Jan 2026:** because of the switch to the LAMDA system, December 2025 reflects the situation on 22 December, which causes inconsistencies in Dec 2025 and Jan 2026 (small in the Swiss total).
+- Until 1982 only fully unemployed persons are counted, from 1983 all unemployed.
+- March–May 2018: a new recording system overstated the fall in unemployment (at most 0.1 pp on the rate, according to SECO).
+- Strong seasonality (higher in winter), so growth rates must be y/y or seasonally adjusted.
+
+```{r}
+# Registered unemployed, Switzerland as a whole: the row where both region and
+# canton are "Total" (the regions and cantons add up to it exactly).
+# The raw file runs from the newest month to the oldest, so we sort by date.
+unemployed_clean <- unemployed %>%
+  filter(region == "Total", canton == "Total") %>%
+  select(date, unemployed, status) %>%
+  arrange(date)
+
+# Check: no missing values, no duplicated or missing months, status always "A" (normal value)
+unemployed_clean %>% summarise(from           = min(date),
+                               to             = max(date),
+                               na             = sum(is.na(unemployed)),
+                               duplicates     = sum(duplicated(date)),
+                               missing_months = length(seq(min(date), max(date), by = "month")) - n(),
+                               status         = paste(unique(status), collapse = ", "))
+
+# Save the cleaned series
+write_csv(unemployed_clean, file.path(clean_dir, "unemployed_clean.csv"))
+```
+
+# GDP
+
+### Clean
+
+Source: SECO, quarterly national accounts (production approach), seasonally, calendar and sport-event adjusted, Q1 1980 – Q2 2026. Nominal and real GDP in CHF million (real = chained volumes at 2020 prices), deflator 2020 = 100. We keep total GDP (`B1GQ`); the sector rows are not used (they only start in 1990). Complete, no duplicates or missing quarters; nominal / real × 100 equals the deflator, and the deflator averages 100 in 2020.
+
+Notes: GDP is the only quarterly series and the only one already seasonally adjusted. Quarters are dated by their first month (Q3 = 1 July). SECO revises past quarters with each release; `download_log.csv` records the vintage used.
+
+```{r}
+# GDP (code B1GQ) in its three forms, one column each:
+# nom_q  = nominal GDP, CHF million (current prices)
+# real_q = real GDP, CHF million (chained volumes, prices of 2020)
+# defl_q = GDP deflator (2020 = 100)
+# The sector rows (NOGA codes, B1G, D21, D31) are not used.
+gdp_clean <- gdp %>%
+  filter(code == "B1GQ") %>%
+  select(date, concept, value) %>%
+  pivot_wider(names_from = concept, values_from = value) %>%
+  rename(gdp_nominal = nom_q, gdp_real = real_q, gdp_deflator = defl_q) %>%
+  arrange(date)
+
+# Check: no missing values, no duplicated or missing quarters
+gdp_clean %>% summarise(from             = min(date),
+                        to               = max(date),
+                        na               = sum(is.na(across(-date))),
+                        duplicates       = sum(duplicated(date)),
+                        missing_quarters = length(seq(min(date), max(date), by = "quarter")) - n())
+
+# Save the cleaned series
+write_csv(gdp_clean, file.path(clean_dir, "gdp_clean.csv"))
+```
+
+# CPI weights
+
+### Clean
+
+Source: BFS, LIK weights of every basket (su-d-05.02.90), loaded as `cpi_weights`, in % of the total CPI. Totals equal 100 for every year; no duplicates or missing weights. The BFS updates the weights every year since 2000; before, they only change with the basket (1982, 1993) and are carried forward to the next basket.
+
+We need one weight per year for each block aggregate. From 2016 the BFS publishes them directly (codes `113_101`, `112_101`, `1819_118`, `1819_119`). Before 2016 there are no codes, so rent and petroleum are built from their items, using the BFS definition: petroleum = heating oil + fuel (checked: 0.687 + 2.15 = 2.83 = `112_101` in 2016), rent = housing rental. Position numbers differ by basket.
+
+Open point (to discuss with the professor): the domestic and imported weights are only in this file from 2016. Older BFS releases of the CPI (su-d-05.02.69 to .72) contain them back to 1993, but they are not loaded yet. The 1993 and 2000 baskets start in May, so Jan–Apr of those years get the new basket's weights.
+
+```{r}
+# Items that make up each block weight, by basket.
+# Before 2015: matched on basket and position number (pos_no), because the
+# older baskets have no codes. From 2015: matched on basket and code.
+block_items <- tribble(
+  ~basket, ~pos_no, ~code,      ~block,
+  1982,    1113,    NA,         "w_rent",
+  1982,    1114,    NA,         "w_oil",        # liquid fuels = heating oil
+  1982,    1400,    NA,         "w_oil",        # petrol
+  1993,    3001,    NA,         "w_rent",
+  1993,    3083,    NA,         "w_oil",        # heating oil
+  1993,    6127,    NA,         "w_oil",        # fuel
+  2000,    4002,    NA,         "w_rent",
+  2000,    4090,    NA,         "w_oil",        # heating oil
+  2000,    7105,    NA,         "w_oil",        # fuel
+  2005,    4002,    NA,         "w_rent",
+  2005,    4090,    NA,         "w_oil",
+  2005,    7105,    NA,         "w_oil",
+  2010,    4002,    NA,         "w_rent",
+  2010,    4090,    NA,         "w_oil",
+  2010,    7105,    NA,         "w_oil",
+  2015,    NA,      "113_101",  "w_rent",
+  2015,    NA,      "112_101",  "w_oil",
+  2015,    NA,      "1819_118", "w_domestic",
+  2015,    NA,      "1819_119", "w_imported",
+  2020,    NA,      "113_101",  "w_rent",
+  2020,    NA,      "112_101",  "w_oil",
+  2020,    NA,      "1819_118", "w_domestic",
+  2020,    NA,      "1819_119", "w_imported",
+  2025,    NA,      "113_101",  "w_rent",
+  2025,    NA,      "112_101",  "w_oil",
+  2025,    NA,      "1819_118", "w_domestic",
+  2025,    NA,      "1819_119", "w_imported")
+
+# One row per year with the weight of each block (in % of the total CPI)
+cpi_weights_clean <- bind_rows(
+    cpi_weights %>% inner_join(filter(block_items, is.na(code)) %>% select(-code),
+                               by = c("basket", "pos_no")),
+    cpi_weights %>% inner_join(filter(block_items, !is.na(code)) %>% select(-pos_no),
+                               by = c("basket", "code"))) %>%
+  group_by(year, block) %>%
+  summarise(weight = sum(weight), .groups = "drop") %>%
+  pivot_wider(names_from = block, values_from = weight) %>%
+  complete(year = 1982:2026) %>%
+  fill(w_rent, w_oil) %>%              # basket weights stay valid until the next basket
+  select(year, w_rent, w_oil, w_domestic, w_imported)
+
+# Check: one row per year, 1982-2026; domestic/imported only from 2016
+cpi_weights_clean %>% summarise(from           = min(year),
+                                to             = max(year),
+                                duplicates     = sum(duplicated(year)),
+                                na_rent        = sum(is.na(w_rent)),
+                                na_oil         = sum(is.na(w_oil)),
+                                first_domestic = min(year[!is.na(w_domestic)]))
+
+# Save the cleaned series
+write_csv(cpi_weights_clean, file.path(clean_dir, "cpi_weights_clean.csv"))
+```
+
+# Reference rate
+
+### Clean
+
+Source: Federal Office for Housing (BWO), mortgage reference rate for rents and the average mortgage rate it is based on, Sep 2008 – Sep 2026. No cleaning needed: complete, no missing values, one announcement per quarter (83–94 days apart). The format problems of the hand-copied BWO table (text like "1,25 %", numbers changed by Excel) are already fixed in `01_load_data.R`.
+
+Notes:
+
+- **Starts in Sep 2008**, when the federal reference rate replaced the cantonal mortgage rates. The rent block cannot use it before that.
+- **Step series:** announced quarterly (valid from early Mar/Jun/Sep/Dec), always a multiple of 0.25, and changed only 13 times since 2008. Since Dec 2011 it is the average mortgage rate rounded to 0.25 (checked: holds for every row).
+- **Timing:** announced about 2 months after the survey date; a change announced in June can first affect rents in the August rent survey, and tenants adjust with a further delay.
+
+```{r}
+# Evidence: the reference rate only moves in steps of 0.25 pp (13 changes since 2008)
+reference_rate %>%
+  mutate(change = reference_rate - lag(reference_rate)) %>%
+  filter(change != 0) %>%
+  select(valid_from, reference_rate, change)
+```
