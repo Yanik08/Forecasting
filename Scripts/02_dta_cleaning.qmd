@@ -377,6 +377,75 @@ cpi_weights_clean %>% summarise(from           = min(year),
 # Save the cleaned series
 write_csv(cpi_weights_clean, file.path(clean_dir, "cpi_weights_clean.csv"))
 ```
+The domestic and imported weights are only in this file from 2016. Before 2016 we recover them from the CPI indices themselves (see below), so no weight is approximated.
+
+### Preprocess: domestic and imported weights before 2016
+
+Headline CPI is made of exactly two parts, domestic and imported. Within a year, with each index divided by its value in the previous December (a "ratio"), the BFS computes:
+
+ratio_total = w_domestic/100 × ratio_domestic + w_imported/100 × ratio_imported, with w_domestic + w_imported = 100
+
+so that ratio_total − ratio_domestic = w_imported/100 × (ratio_imported − ratio_domestic). The only unknown is the weight, which we estimate for each year by least squares on its 12 months. Where the BFS publishes the weights (2016+), the recovered ones are identical (differences < 0.04 pp, from rounding of the published indices), so the method is exact, not an approximation.
+
+Before 2000 the weights only change with the basket (1982, 1993), so the yearly recovered values are less meaningful there; our estimation sample starts in 2000.
+
+```{r}
+# December value of headline, domestic and imported = base of the following year
+december <- cpi_index_clean %>%
+  filter(month(date) == 12) %>%
+  transmute(year  = year(date) + 1,
+            dec_t = cpi_total,
+            dec_d = cpi_domestic,
+            dec_i = cpi_imported)
+
+# Imported weight of each year, recovered with least squares (no constant)
+# on the 12 months of the year: y = w_imported/100 * x
+w_recovered <- cpi_index_clean %>%
+  mutate(year = year(date)) %>%
+  inner_join(december, by = "year") %>%
+  mutate(y = cpi_total    / dec_t - cpi_domestic / dec_d,
+         x = cpi_imported / dec_i - cpi_domestic / dec_d) %>%
+  group_by(year) %>%
+  summarise(w_imported_rec = 100 * sum(x * y) / sum(x^2))
+
+# Check: where the BFS publishes the weights (2016+), the recovered ones
+# must be the same (differences only from rounding of the published indices)
+cpi_weights_clean %>%
+  inner_join(w_recovered, by = "year") %>%
+  filter(!is.na(w_imported)) %>%
+  summarise(years = n(),
+            max_abs_diff = max(abs(w_imported_rec - w_imported)))
+
+# Published weights where they exist (2016+), recovered ones before;
+# domestic = 100 - imported (the two add up to the total CPI)
+cpi_weights_full <- cpi_weights_clean %>%
+  left_join(w_recovered, by = "year") %>%
+  mutate(source     = case_when(!is.na(w_imported)     ~ "published",
+                                 !is.na(w_imported_rec) ~ "recovered"),
+         w_imported = coalesce(w_imported, w_imported_rec),
+         w_domestic = coalesce(w_domestic, 100 - w_imported)) %>%
+  select(year, w_rent, w_oil, w_domestic, w_imported, source)
+
+# Check: no missing weights from 1983 (1982 has no previous December)
+cpi_weights_full %>%
+  filter(year >= 1983) %>%
+  summarise(from = min(year), to = max(year),
+            na = sum(is.na(w_domestic) | is.na(w_imported)))
+
+# Save the preprocessed weights
+write_csv(cpi_weights_full, file.path(clean_dir, "cpi_weights_full.csv"))
+
+# Check: recovered vs published imported weight, every year the BFS publishes it
+cpi_weights_clean %>%
+  inner_join(w_recovered, by = "year") %>%
+  filter(!is.na(w_imported)) %>%
+  transmute(year,
+            published = w_imported,
+            recovered = round(w_imported_rec, 3),
+            diff_pp   = round(w_imported_rec - w_imported, 3)) %>%
+  as.data.frame()          # data.frame prints all decimals (a tibble rounds to 3 digits)
+```
+
 
 # Reference rate
 
