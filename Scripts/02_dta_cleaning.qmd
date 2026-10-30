@@ -377,6 +377,7 @@ cpi_weights_clean %>% summarise(from           = min(year),
 # Save the cleaned series
 write_csv(cpi_weights_clean, file.path(clean_dir, "cpi_weights_clean.csv"))
 ```
+
 The domestic and imported weights are only in this file from 2016. Before 2016 we recover them from the CPI indices themselves (see below), so no weight is approximated.
 
 ### Preprocess: domestic and imported weights before 2016
@@ -385,7 +386,7 @@ Headline CPI is made of exactly two parts, domestic and imported. Within a year,
 
 ratio_total = w_domestic/100 × ratio_domestic + w_imported/100 × ratio_imported, with w_domestic + w_imported = 100
 
-so that ratio_total − ratio_domestic = w_imported/100 × (ratio_imported − ratio_domestic). The only unknown is the weight, which we estimate for each year by least squares on its 12 months. Where the BFS publishes the weights (2016+), the recovered ones are identical (differences < 0.04 pp, from rounding of the published indices), so the method is exact, not an approximation.
+so that ratio_total − ratio_domestic = w_imported/100 × (ratio_imported − ratio_domestic). The only unknown is the weight, which we estimate for each year by least squares on its 12 months. Where the BFS publishes the weights (2016+), the recovered ones are identical (differences \< 0.04 pp, from rounding of the published indices), so the method is exact, not an approximation.
 
 Before 2000 the weights only change with the basket (1982, 1993), so the yearly recovered values are less meaningful there; our estimation sample starts in 2000.
 
@@ -445,6 +446,7 @@ cpi_weights_clean %>%
             diff_pp   = round(w_imported_rec - w_imported, 3)) %>%
   as.data.frame()          # data.frame prints all decimals (a tibble rounds to 3 digits)
 ```
+
 ### Building the two missing blocks
 
 The BFS publishes "imported" and "domestic", but not "imported excl. oil" or "domestic excl. rents". The CPI is chained every December, so we work year by year:
@@ -457,7 +459,7 @@ Assumption: all oil products are imported, all rents are domestic.
 
 ```{r blocks}
 # December value of each index = base of the following year
-december <- cpi %>%
+dec_index <- cpi_index_clean %>%
   filter(month(date) == 12) %>%
   transmute(year         = year(date) + 1,
             dec_domestic = cpi_domestic,
@@ -467,11 +469,11 @@ december <- cpi %>%
 
 # Ratio of each index to the previous December, then remove oil from
 # imported and rents from domestic with that year's weights
-blocks_m <- cpi %>%
+cpi_blocks <- cpi_index_clean %>%
   mutate(year = year(date)) %>%
   filter(year >= 1983) %>%
-  left_join(weights, by = "year") %>%
-  left_join(december, by = "year") %>%
+  left_join(cpi_weights_full, by = "year") %>%
+  left_join(dec_index, by = "year") %>%
   mutate(r_domestic  = cpi_domestic / dec_domestic,
          r_imported  = cpi_imported / dec_imported,
          r_rent      = cpi_rent     / dec_rent,
@@ -481,33 +483,34 @@ blocks_m <- cpi %>%
 
 # Chain the years: the "link" of a year = product of all previous
 # December ratios (so the series is continuous across years)
-links <- blocks_m %>%
+links <- cpi_blocks %>%
   filter(month(date) == 12) %>%
   select(year, dec_imp = r_imp_xoil, dec_dom = r_dom_xrent) %>%
-  complete(year = 1983:max(blocks_m$year)) %>%
+  complete(year = 1983:max(cpi_blocks$year)) %>%
   mutate(link_imp = lag(cumprod(dec_imp), default = 1),
          link_dom = lag(cumprod(dec_dom), default = 1)) %>%
   select(year, link_imp, link_dom)
 
 # Chained index, rebased to Dec 2025 = 100 like the published BFS indices
-blocks_m <- blocks_m %>%
+cpi_blocks <- cpi_blocks %>%
   left_join(links, by = "year") %>%
   mutate(cpi_imp_xoil  = 100 * link_imp * r_imp_xoil,
          cpi_dom_xrent = 100 * link_dom * r_dom_xrent) %>%
   mutate(across(c(cpi_imp_xoil, cpi_dom_xrent),
                 ~ 100 * .x / .x[date == as.Date("2025-12-01")])) %>%
-  select(date, cpi_total, cpi_oil, cpi_rent, cpi_imp_xoil, cpi_dom_xrent,
-         w_rent, w_oil, w_domestic, w_imported)
+  select(date, cpi_total, cpi_oil, cpi_rent, cpi_imp_xoil, cpi_dom_xrent)
 
 # Check: complete monthly series, no missing values
-blocks_m %>%
+cpi_blocks %>%
   summarise(from = min(date), to = max(date), months = n(),
             na = sum(is.na(cpi_imp_xoil) | is.na(cpi_dom_xrent)))
 
 # Check: all indices = 100 in Dec 2025
-blocks_m %>% filter(date == as.Date("2025-12-01")) %>% select(date, starts_with("cpi"))
-```
+cpi_blocks %>% filter(date == as.Date("2025-12-01"))
 
+# Save the preprocessed series
+write_csv(cpi_blocks, file.path(clean_dir, "cpi_blocks.csv"))
+```
 
 ### Preprocess: monthly to quarterly
 
@@ -516,7 +519,7 @@ All forecast models are quarterly. Quarterly value = average of the 3 months (st
 ```{r}
 # Monthly data in one table: the 4 blocks + headline, and the oil drivers.
 # inner_join keeps the months that exist in both (Aug 1987 onwards).
-monthly <- blocks_m %>%
+monthly <- cpi_blocks %>%
   inner_join(brent_chf, by = "date")
 
 # Quarterly value = average of the 3 months of the quarter.
@@ -562,4 +565,3 @@ reference_rate %>%
   filter(change != 0) %>%
   select(valid_from, reference_rate, change)
 ```
-
