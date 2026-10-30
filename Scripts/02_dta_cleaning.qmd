@@ -435,7 +435,7 @@ cpi_weights_full %>%
 # Save the preprocessed weights
 write_csv(cpi_weights_full, file.path(clean_dir, "cpi_weights_full.csv"))
 
-# Check: recovered vs published imported weight, every year the BFS publishes it
+# Check: recovered vs published imported weight, every year the BFS publishes it - checks if our method of recovery is correct
 cpi_weights_clean %>%
   inner_join(w_recovered, by = "year") %>%
   filter(!is.na(w_imported)) %>%
@@ -445,7 +445,103 @@ cpi_weights_clean %>%
             diff_pp   = round(w_imported_rec - w_imported, 3)) %>%
   as.data.frame()          # data.frame prints all decimals (a tibble rounds to 3 digits)
 ```
+### Building the two missing blocks
 
+The BFS publishes "imported" and "domestic", but not "imported excl. oil" or "domestic excl. rents". The CPI is chained every December, so we work year by year:
+
+1.  each index is divided by its value in the previous December (a "ratio"),
+2.  oil is removed from imported and rents from domestic with that year's weights,
+3.  the years are chained back together through the December ratios.
+
+Assumption: all oil products are imported, all rents are domestic.
+
+```{r blocks}
+# December value of each index = base of the following year
+december <- cpi %>%
+  filter(month(date) == 12) %>%
+  transmute(year         = year(date) + 1,
+            dec_domestic = cpi_domestic,
+            dec_imported = cpi_imported,
+            dec_rent     = cpi_rent,
+            dec_oil      = cpi_oil)
+
+# Ratio of each index to the previous December, then remove oil from
+# imported and rents from domestic with that year's weights
+blocks_m <- cpi %>%
+  mutate(year = year(date)) %>%
+  filter(year >= 1983) %>%
+  left_join(weights, by = "year") %>%
+  left_join(december, by = "year") %>%
+  mutate(r_domestic  = cpi_domestic / dec_domestic,
+         r_imported  = cpi_imported / dec_imported,
+         r_rent      = cpi_rent     / dec_rent,
+         r_oil       = cpi_oil      / dec_oil,
+         r_imp_xoil  = (w_imported * r_imported - w_oil  * r_oil)  / (w_imported - w_oil),
+         r_dom_xrent = (w_domestic * r_domestic - w_rent * r_rent) / (w_domestic - w_rent))
+
+# Chain the years: the "link" of a year = product of all previous
+# December ratios (so the series is continuous across years)
+links <- blocks_m %>%
+  filter(month(date) == 12) %>%
+  select(year, dec_imp = r_imp_xoil, dec_dom = r_dom_xrent) %>%
+  complete(year = 1983:max(blocks_m$year)) %>%
+  mutate(link_imp = lag(cumprod(dec_imp), default = 1),
+         link_dom = lag(cumprod(dec_dom), default = 1)) %>%
+  select(year, link_imp, link_dom)
+
+# Chained index, rebased to Dec 2025 = 100 like the published BFS indices
+blocks_m <- blocks_m %>%
+  left_join(links, by = "year") %>%
+  mutate(cpi_imp_xoil  = 100 * link_imp * r_imp_xoil,
+         cpi_dom_xrent = 100 * link_dom * r_dom_xrent) %>%
+  mutate(across(c(cpi_imp_xoil, cpi_dom_xrent),
+                ~ 100 * .x / .x[date == as.Date("2025-12-01")])) %>%
+  select(date, cpi_total, cpi_oil, cpi_rent, cpi_imp_xoil, cpi_dom_xrent,
+         w_rent, w_oil, w_domestic, w_imported)
+
+# Check: complete monthly series, no missing values
+blocks_m %>%
+  summarise(from = min(date), to = max(date), months = n(),
+            na = sum(is.na(cpi_imp_xoil) | is.na(cpi_dom_xrent)))
+
+# Check: all indices = 100 in Dec 2025
+blocks_m %>% filter(date == as.Date("2025-12-01")) %>% select(date, starts_with("cpi"))
+```
+
+
+### Preprocess: monthly to quarterly
+
+All forecast models are quarterly. Quarterly value = average of the 3 months (standard for price indices). Only complete quarters are kept. The file contains the 4 blocks, headline CPI and the oil drivers (Brent in USD, CHF per USD, Brent in CHF), from 1987Q4, when CHF/USD (and so Brent in CHF) starts.
+
+```{r}
+# Monthly data in one table: the 4 blocks + headline, and the oil drivers.
+# inner_join keeps the months that exist in both (Aug 1987 onwards).
+monthly <- blocks_m %>%
+  inner_join(brent_chf, by = "date")
+
+# Quarterly value = average of the 3 months of the quarter.
+# A quarter is kept only if all 3 months are there, so an incomplete
+# last quarter is not averaged over 1 or 2 months.
+quarterly_data <- monthly %>%
+  mutate(quarter = floor_date(date, "quarter")) %>%
+  group_by(quarter) %>%
+  summarise(n_months = n(),
+            across(-date, mean)) %>%
+  filter(n_months == 3) %>%
+  select(date = quarter, everything(), -n_months)
+
+# Check: no missing values, no duplicated or missing quarters
+quarterly_data %>%
+  summarise(from       = min(date),
+            to         = max(date),
+            quarters   = n(),
+            expected   = length(seq(min(date), max(date), by = "quarter")),
+            duplicates = sum(duplicated(date)),
+            na         = sum(is.na(across(everything()))))
+
+# Save the preprocessed series
+write_csv(quarterly_data, file.path(clean_dir, "quarterly_data.csv"))
+```
 
 # Reference rate
 
@@ -466,3 +562,4 @@ reference_rate %>%
   filter(change != 0) %>%
   select(valid_from, reference_rate, change)
 ```
+
