@@ -8,7 +8,7 @@
 
 # Descriptive analysis and model selection
 
-This file comes after `02_dta_cleaning.qmd`. It only reads the quarterly data built there and does descriptive analysis and model selection. No data is built or changed here.
+This file follows `02_dta_cleaning.qmd`. We read the quarterly data built there and use it for descriptive analysis and model selection only; no data is built or modified here.
 
 ```{r}
 library(here)
@@ -67,17 +67,17 @@ ggplot(filter(inflation, !is.na(yoy)), aes(date, yoy)) +
   labs(title = "Year-on-year inflation, in %", x = NULL, y = NULL)
 ```
 
-1.  Two regimes: the early 1990s, then low inflation. Every block has high inflation from 1989 to 1993: rents up to 10 %, headline about 6 %. After that, inflation stays below 3 %. The early 1990s don’t look like the rest of the sample, which is a good argument for starting the estimation sample in the late 1990s or 2000.
+1.  Two regimes. All blocks show high inflation from 1989 to 1993 (rents up to 10 %, headline about 6 %), and inflation remains below 3 % afterwards. Since the early 1990s differ clearly from the rest of the sample, we start the estimation sample in 2000.
 
-2.  The deflation period is visible. It’s strongest in imported excl. oil: its level drops by about 12 % between 2011 and 2016, and its y/y inflation reaches −5 % in 2012. That’s the strong franc. Headline and domestic excl. rents are also slightly negative over 2012–2016 and in 2020.
+2.  Deflation period. It is strongest in imported excl. oil: the level falls by about 12 % between 2011 and 2016 and y/y inflation reaches −5 % in 2012, reflecting the strong franc. Headline and domestic excl. rents are also slightly negative over 2012–2016 and in 2020.
 
-3.  Seasonality in imported excl. oil, but only from 2000 to about 2015. Look at the zig-zag in its level panel. It’s mostly clothing and shoes, whose prices fall during the January and July sales. Before 2000 the BFS didn’t record sale prices, so there’s no zig-zag. After about 2015 it gets weaker. So that seasonal pattern changes over the sample, which matters for the seasonality chunk.
+3.  Seasonality in imported excl. oil between 2000 and about 2015, visible as a zig-zag in the level. It comes mainly from clothing and shoes, whose prices fall during the January and July sales. Sale prices are only recorded by the BFS since 2000, and the pattern weakens after about 2015. The seasonal pattern therefore changes over the sample, which we take into account in section 3.
 
-4.  Rents rise smoothly. There are no breaks and no seasonality, and growth is almost constant after 1995, just slower in 2010–2020. It will be the easiest ARIMA.
+4.  Rents rise smoothly, with no breaks and no seasonality. Growth is almost constant after 1995 and slower in 2010–2020.
 
-5.  Oil is very volatile. It moves between −40 % and +35 % y/y, with crashes in 2009, 2015 and 2020, and spikes in 2000, 2008 and 2022. That’s why it gets its own model with Brent and the USD rate.
+5.  Oil products are very volatile, between −40 % and +35 % y/y, with falls in 2009, 2015 and 2020 and peaks in 2000, 2008 and 2022. For this reason we model this block separately, with Brent and the USD exchange rate as drivers.
 
-6.  Inflation in 2021–2023 was a common shock that shows up in every block, followed by a fall back to about 0–1.5 %.
+6.  The 2021–2023 inflation episode is a common shock visible in every block, followed by a return to about 0–1.5 %.
 
 # 2. Descriptive statistics
 
@@ -111,13 +111,13 @@ inflation %>%
   as.data.frame()          # data.frame shows all columns
 ```
 
-The blocks behave very differently, which justifies modelling them separately. Oil is very volatile: its standard deviation is 23 times that of rents. Rents are stable and almost always rising (only 8 % of quarters are negative). Imported excl. oil falls more often than it rises.
+The blocks behave very differently, which supports modelling them separately. Oil products are the most volatile, with a standard deviation 23 times that of rents. Rents are stable and almost always rising (only 8 % of quarters are negative). Imported excl. oil falls more often than it rises.
 
-Imported excl. oil has a negative average (−0.12 % per quarter). The second table shows where it comes from: the strong-franc period 2009–2016 (−1.8 % y/y). In the other periods it’s close to zero or positive. This is the bias coming from deflation periods. An ARIMA with drift estimated from 2000 would carry this negative average into the forecast. It needs to be dealt with in model selection: a dummy for 2009–2016, or no drift.
+Imported excl. oil has a negative average (−0.12 % per quarter). The second table shows that this comes from the strong-franc period 2009–2016 (−1.8 % y/y); in the other periods the average is close to zero or positive. An ARIMA with drift estimated from 2000 would carry this negative average into the forecast. We address this in model selection, either with a 2009–2016 dummy or without drift.
 
-Imported excl. oil is volatile (sd 1.89) for a non-energy block. Its y/y inflation is much smoother, so most of that volatility is the seasonal zig-zag from sales, not real inflation. The next chunk tests this.
+Imported excl. oil is also volatile for a non-energy block (sd 1.89), while its y/y inflation is much smoother. Most of the q-o-q volatility is therefore the seasonal pattern from sales, which we test in section 3.
 
-The early 1990s are a different world, with inflation four to five times higher in every block. This supports starting the estimation sample after them, around 2000, rather than in 1988.
+Inflation in the early 1990s is four to five times higher than later in every block. We therefore start the estimation sample in 2000 rather than in 1988.
 
 # 3. Seasonality
 
@@ -153,17 +153,17 @@ seasonality %>%
   as.data.frame()
 ```
 
-The blocks split into three groups.
+The blocks fall into three groups.
 
-1.  Imported excl. oil is the most seasonal block. The quarter dummies explain about two thirds of its q-o-q inflation (R² = 0.67, F = 70). Prices fall in Q1 and Q3 and rise in Q2 and Q4, which is the January and July sales. The pattern shrinks a lot between the two halves: Q3 goes from −2.64 to −1.13 and Q4 from +1.84 to +0.23. This confirms the zig-zag in the level plot and the later weakening. It also explains most of the high q-o-q volatility seen in section 2.
+1.  Imported excl. oil is the most seasonal block. Quarter dummies explain about two thirds of its q-o-q inflation (R² = 0.67, F = 70). Prices fall in Q1 and Q3 and rise in Q2 and Q4, in line with the January and July sales. The pattern weakens strongly between the two halves: Q3 goes from −2.64 to −1.13 and Q4 from +1.84 to +0.23. This is consistent with the level plot and explains most of the q-o-q volatility found in section 2.
 
-2.  Domestic excl. rents is also clearly seasonal (R² = 0.44), but the pattern is stable. Q1 is about +0.5 % in both halves, i.e. prices are reset at the start of the year (tariffs, administered prices, services). Only Q4 changes, from about 0 to −0.33.
+2.  Domestic excl. rents is also clearly seasonal (R² = 0.44), with a stable pattern. Q1 is about +0.5 % in both halves, as many prices are adjusted at the start of the year (tariffs, administered prices, services). Only Q4 changes, from about 0 to −0.33.
 
-3.  Rents and oil are not really seasonal. Rents never reject (p = 0.59 on the full sample, 0.93 after 2012). Oil only rejects on the full sample at 5 % (p = 0.01, R² = 0.10). Its Q2 is positive, which fits the spring driving season, but this is small next to its volatility (sd 6.5).
+3.  Rents and oil products show little seasonality. For rents the test never rejects (p = 0.59 on the full sample, 0.93 after 2012). For oil it rejects only on the full sample at 5 % (p = 0.01, R² = 0.10); Q2 is positive, in line with the spring driving season, but small relative to its volatility (sd 6.5).
 
-Headline CPI is seasonal (R² = 0.43). This comes mostly from imported and domestic, and it weakens with the imported pattern (R² 0.62 → 0.39).
+Headline CPI is seasonal (R² = 0.43), mainly through imported and domestic goods, and its seasonality weakens together with the imported pattern (R² 0.62 → 0.39).
 
-For model selection: imported and domestic need a seasonal term, and rents and oil don't need one for seasonal means. For imported, fixed quarter dummies estimated from 2000 would carry the strong early-2000s pattern into the forecast. A seasonal AR term or a seasonal difference can adapt to a pattern that changes over time, so those are the two options discussed in sections 4 and 5. Since we forecast y-o-y inflation, the seasonality mostly cancels in the final numbers, but it still has to be modelled correctly in the q-o-q models.
+For model selection, we include a seasonal term for imported and domestic goods, but not for rents and oil. For imported goods, fixed quarter dummies estimated from 2000 would carry the strong early-2000s pattern into the forecast. We therefore consider a seasonal AR term or a seasonal difference, which can adapt to a changing pattern (sections 4 and 5). Although the seasonality largely cancels in y-o-y inflation, it still has to be modelled in the q-o-q models.
 
 # 4. Stationarity
 
@@ -209,15 +209,15 @@ unit_roots <- map(test_vars, \(v) unit_root_tests(sample_2000[[v]], qtr)) %>%
 unit_roots %>% as.data.frame()
 ```
 
-Every series is I(1): non-stationary in levels, stationary in first differences. So all three ARIMA blocks use d = 1: we model quarterly inflation, not the price level. This is the standard result for price indices.
+All series are I(1): non-stationary in levels and stationary in first differences. We therefore use d = 1 for the three ARIMA blocks, i.e. we model quarterly inflation rather than the price level, as is standard for price indices.
 
-Domestic excl. rents is a borderline case in levels. The ADF rejects the unit root (−3.63 \< −3.43), but the KPSS rejects stationarity. When the two tests disagree, the cautious choice is to difference. A wrongly undifferenced model gives badly biased long forecasts, while an unnecessary difference costs little.
+Domestic excl. rents is a borderline case in levels: the ADF test rejects the unit root (−3.63 \< −3.43), while the KPSS test rejects stationarity. Given this conflict, we difference the series. Not differencing an I(1) series leads to biased long-horizon forecasts, while an unnecessary difference has a smaller cost.
 
-Imported and domestic are only just stationary in differences (−2.97 and −2.92 vs −2.88). That fits the plots: their inflation stays away from its mean for long stretches (the strong-franc years, the 2022 surge). In the ARIMA this shows up as AR terms, and possibly the 2009–2016 dummy.
+Imported and domestic goods are only marginally stationary in differences (−2.97 and −2.92 vs −2.88). This is consistent with the plots, where inflation stays away from its mean for long periods (strong-franc years, 2022 surge). In the ARIMA models this is captured by AR terms, and possibly by a 2009–2016 dummy.
 
-Imported excl. oil: the OCSB test asks for a seasonal difference. It confirms what we saw in section 3: the seasonal pattern isn’t fixed but shrinks over time. So in model selection we compare two options for this block: a seasonal difference (D = 1), or a seasonal AR term on top of d = 1.
+For imported excl. oil, the OCSB test indicates one seasonal difference. This is consistent with section 3, where the seasonal pattern weakens over time. For this block we therefore consider two specifications: a seasonal difference (D = 1), or a seasonal AR term with d = 1.
 
-Oil block: oil products, Brent and the exchange rate are all I(1). That’s exactly the condition for testing cointegration, a stable long-run link in levels, which justifies the ECM.
+Oil products, Brent and the exchange rate are all I(1), which is the condition for testing cointegration and estimating an ECM.
 
 # 5. Model selection: ARIMA blocks
 
@@ -276,19 +276,17 @@ imap(best_fits, \(fit, name) {
   as.data.frame()
 ```
 
-Rents: ARIMA(1,1,1)(1,0,0) + drift.
+**Rents: ARIMA(1,1,1)(1,0,0) with drift.** All coefficients are significant and the residuals show no autocorrelation (Ljung-Box p = 0.74). The drift of 0.36 % per quarter implies long-run rent inflation of about 1.4 % per year. The seasonal AR term is significant (0.27) although section 3 found no seasonal means: rent inflation is related to the same quarter of the previous year, consistent with yearly rent adjustments (e.g. after reference-rate changes). The three best models are close in BIC.
 
-Every coefficient is significant, and the residuals are clean (Ljung-Box p = 0.74). The drift of 0.36 % per quarter means about 1.4 % per year of long-run rent inflation, which is plausible. The seasonal AR is significant (0.27) even though section 3 found no seasonal means. It captures something different: this quarter’s rent inflation is related to the same quarter last year. That fits rents being adjusted once a year, for example after reference-rate changes. The top 3 are very close in BIC, so the choice isn’t critical.
+**Imported excl. oil: ARIMA(2,1,1)(1,0,0) with drift.**
 
-Imported excl. oil: ARIMA(2,1,1)(1,0,0) + drift. Two issues:
+- The drift is negative (−0.14 % per quarter) and not significant. It reflects the strong-franc period and would imply steadily falling import prices at long horizons. We compare a model without drift and a model with a 2009–2016 dummy.
+- ar1 = −0.70 and ma1 = +0.74 nearly cancel, which suggests a common factor and a possibly over-parameterised model.
+- The seasonal difference suggested by the OCSB test cannot be compared by BIC, since it changes the data being fitted. We compare it by out-of-sample forecast accuracy.
 
-The drift is negative (−0.14 % per quarter) and not significant. This is the strong-franc bias from the earlier discussion. Over a long horizon, this model would forecast steadily falling import prices. Options: drop the drift, or add a 2009–2016 dummy, then compare the forecasts. ar1 = −0.70 and ma1 = +0.74 almost cancel each other. This is a classic sign of a common factor: the two terms partly offset, and the model may be more complex than it needs to be. A simpler model is worth checking. The seasonal difference that the OCSB test suggested is also still open. It can’t be compared by BIC, because a seasonal difference changes the data being fitted. It has to be compared by out-of-sample forecast accuracy instead.
+**Domestic excl. rents: ARIMA(0,1,0)(1,0,0) with drift.** Inflation depends only on the same quarter of the previous year (sar1 = 0.73), in line with the stable Q1 pattern of section 3. The residuals pass the Ljung-Box test only marginally (p = 0.11). The second-best model, ARIMA(1,1,0)(1,0,0), has a very similar BIC (30.2 vs 30.0), a lower AICc and cleaner residuals (p = 0.62), so we keep it as an alternative. The drift of 0.15 % per quarter (about 0.6 % per year) is borderline significant (t = 1.8) and also reduced by the strong-franc years.
 
-Domestic excl. rents: ARIMA(0,1,0)(1,0,0) + drift, the simplest possible.
-
-Inflation depends only on the same quarter last year (sar1 = 0.73), which is the strong, stable Q1 pattern from section 3. The residuals pass, but only just (p = 0.11). The second model, (1,1,0)(1,0,0), has almost the same BIC (30.2 vs 30.0), a better AICc and cleaner residuals (p = 0.62). I’d pick (1,1,0)(1,0,0) and say so in the report. The drift of 0.15 % per quarter (about 0.6 % per year) is borderline significant (t = 1.8), and also pulled down by the strong-franc years.
-
-Overall: BIC gives a reasonable first choice. The two open points, the imported drift or dummy and whether a seasonal difference is better, are best settled by an out-of-sample forecast comparison (rolling forecasts, RMSE), which fits in the forecasting/evaluation file.
+BIC provides the first selection. The remaining choices (imported drift or dummy, seasonal difference, domestic specification) can be assessed with the out-of-sample comparison of section 8.
 
 # 6. Oil products: cointegration and ECM
 
@@ -377,27 +375,151 @@ ecm_fit <- lm(ecm_formula(1), data = ecm_data)
 round(summary(ecm_fit)$coefficients, 3)
 ```
 
-**Long-run relation.** Cointegration depends on the trend.
+**Long-run relation.** The result depends on the trend.
 
-- With a constant only, the USD coefficient has the wrong sign (−0.09) and isn't significant. The Engle-Granger test doesn't reject (−2.85 vs −3.74), so this residual isn't stationary.
-- With a trend, everything is significant: Brent 0.43, USD 0.61, trend 0.42 % per quarter (about 1.7 % per year). Engle-Granger rejects clearly (−5.30 vs −4.10).
+- With a constant only, the USD coefficient has the wrong sign (−0.09) and is not significant, and the Engle-Granger test does not reject (−2.85 vs −3.74).
+- With a trend, all coefficients are significant: Brent 0.43, USD 0.61, trend 0.42 % per quarter (about 1.7 % per year). The Engle-Granger test rejects (−5.30 vs −4.10).
 
-The trend is not just a technical fix. Swiss pump prices include per-litre taxes (mineral oil tax, CO2 levy since 2008) and distribution margins that rise over time, independently of crude. The same fixed costs explain why the Brent elasticity is well below 1: crude is only part of the retail price.
+We interpret the trend economically: Swiss fuel prices include per-litre taxes (mineral oil tax, CO2 levy since 2008) and distribution margins that rise over time independently of crude prices. These components also explain why the Brent elasticity is below 1.
 
-**Johansen.** The trace test does not reject r = 0 (37.98 \< 42.44 at 5 %, and also \< 39.06 at 10 %). So the two tests disagree. Reasons to still keep the ECM:
+**Johansen test.** The trace test does not reject r = 0 (37.98 \< 42.44 at 5 % and \< 39.06 at 10 %), so the two tests disagree. We keep the ECM because:
 
-- Johansen has low power here: 3 variables, a trend and only about 105 quarters.
-- We only need one relation, with oil products as the dependent variable, which is exactly the single-equation setting of Engle-Granger.
-- The adjustment coefficient in the ECM is strongly significant (below). A significant α is itself evidence of cointegration (ECM-based test), even though its critical values are stricter than the usual t-table.
+- the Johansen test has low power with 3 variables, a trend and about 105 quarters;
+- we need a single relation with oil products as the dependent variable, which corresponds to the Engle-Granger setting;
+- the adjustment coefficient of the ECM is strongly significant, which is itself evidence of cointegration.
 
-This disagreement should be stated openly in the report. The test here is the same call as in `04_model_estimation.R`, so the statistic matches the one quoted in the report. Adding quarter dummies (`season = 4`) gives 37.80, with the same conclusion.
+The statistic is the same as in `04_model_estimation.R`. Adding quarter dummies (`season = 4`) gives 37.80, with the same conclusion.
 
-**Brent vs. exchange rate.** The equality test rejects (t = 4.09 on b_usd − b_brent = 0.19). So we keep Brent and the USD rate separately rather than using Brent in CHF. The USD elasticity being larger than Brent's is hard to explain economically. It is probably partly the trend and the franc's long appreciation sharing the same slow movement, so the 0.61 shouldn't be over-interpreted.
+**Brent vs. exchange rate.** Equal elasticities are rejected (t = 4.09 on b_usd − b_brent = 0.19), so we keep Brent and the USD rate as separate variables rather than using Brent in CHF. The higher USD elasticity is likely partly due to the trend and the long appreciation of the franc moving together, and should be interpreted with caution.
 
-**Short-run dynamics.** BIC picks 1 lag (515 vs 527 with no lags), and the residuals are clean (Ljung-Box p = 0.73).
+**Short-run dynamics.** BIC selects 1 lag (515 vs 527 with no lags), and the residuals show no autocorrelation (Ljung-Box p = 0.73).
 
-- α = −0.39 (t = −4.3): about 40 % of a gap from the long-run equilibrium closes each quarter, so the half-life is about 1.4 quarters.
-- Pass-through is fast. Within the same quarter, Brent passes 0.31 and the USD rate 0.54, against long-run elasticities of 0.43 and 0.61. Most of the effect is there in the first quarter, and the significant lagged Brent term (0.10) adds part of the rest.
-- The lagged oil and USD terms are not significant. They are kept so that the lag structure is the same for all three variables.
+- α = −0.39 (t = −4.3): about 40 % of a deviation from the long-run equilibrium is corrected each quarter (half-life of about 1.4 quarters).
+- Pass-through is fast: within the same quarter, Brent passes 0.31 and the USD rate 0.54, compared with long-run elasticities of 0.43 and 0.61. The lagged Brent term (0.10) is significant.
+- The lagged oil and USD terms are not significant; we keep them so that all three variables have the same lag structure.
 
-For forecasting, this is a conditional model: forecasts of oil products need paths for Brent and the USD rate. In the recursive evaluation, both steps (long run and ECM) have to be re-estimated in every window, which `fit_ecm()` in `R/models.R` already does.
+The ECM is a conditional model: forecasts of oil products require paths for Brent and the USD rate. In the recursive evaluation, both steps (long run and ECM) are re-estimated in each window, as done by `fit_ecm()` in `R/models.R`.
+
+
+# 7. Diagnostic tests
+
+```{r diagnostics}
+library(tseries)    # jarque.bera.test()
+
+# Residuals of the chosen models: the 3 ARIMA blocks and the oil ECM
+model_resid <- c(map(best_fits, residuals), list(`Oil (ECM)` = residuals(ecm_fit)))
+
+# Jarque-Bera: H0 = normal residuals
+# Ljung-Box on squared residuals: H0 = constant variance (no ARCH)
+imap(model_resid, \(e, name) {
+  tibble(model  = name,
+         jb_p   = jarque.bera.test(e)$p.value,
+         arch_p = Box.test(e^2, lag = 4, type = "Ljung-Box")$p.value)
+}) %>%
+  list_rbind() %>%
+  mutate(across(where(is.double), ~ round(.x, 3))) %>%
+  as.data.frame()
+```
+
+No model shows changing variance (all ARCH p > 0.4). The oil ECM residuals are normal. The residuals of the three ARIMA models are not, because of a few outlier quarters: the electricity tariff increase in 2023Q1 for domestic goods, and the franc peak in 2011Q4 for imported goods. This does not bias the point forecasts, but the prediction intervals of these blocks are less reliable.
+
+# 8. Forecast evaluation
+
+```{r evaluation}
+# --- Set-up ---
+# Pseudo out-of-sample: at each origin (2015Q4, 2016Q1, ...) we re-estimate
+# every model on the data up to that quarter only, forecast 1 to 4 quarters
+# ahead and compare with what actually happened.
+first_origin <- which(sample_2000$date == as.Date("2015-10-01"))
+n_obs        <- nrow(sample_2000)
+origins      <- first_origin:(n_obs - 1)
+h_max        <- 4
+
+# --- 1. ARIMA blocks: chosen model vs AR(1) ---
+# AR(1) benchmark = AR(1) on q-o-q inflation = ARIMA(1,1,0) with drift.
+# Both forecast the log level; at h = 4 the error is the error on the
+# change over 4 quarters, i.e. on y-o-y inflation.
+arima_errors <- imap(arima_vars, \(v, name) {
+  y   <- to_ts(v)
+  ord <- arimaorder(best_fits[[name]])
+  map(origins, \(t) {
+    y_in <- window(y, end = time(y)[t])
+    n_h  <- min(h_max, n_obs - t)
+    f_model <- forecast(Arima(y_in, order = ord[1:3], seasonal = ord[4:6],
+                              include.drift = TRUE), h = n_h)$mean
+    f_ar1   <- forecast(Arima(y_in, order = c(1, 1, 0), include.drift = TRUE), h = n_h)$mean
+    tibble(block = name, origin = sample_2000$date[t], h = 1:n_h,
+           e_model = y[t + 1:n_h] - as.numeric(f_model),
+           e_ar1   = y[t + 1:n_h] - as.numeric(f_ar1))
+  }) %>% list_rbind()
+}) %>% list_rbind()
+
+# --- 2. Oil ECM vs AR(1) ---
+# The ECM needs future Brent and USD. We assume no change after the origin
+# (random walk for the drivers), which is what we could have assumed in real time.
+ecm_forecast <- function(t, h) {
+  train <- oil %>% slice(1:t)
+  lr    <- lm(oil ~ brent + usd + trend, data = train)
+  d     <- train %>%
+    mutate(ect_l1     = lag(residuals(lr)),
+           d_oil      = oil - lag(oil),     d_oil_l1   = lag(d_oil),
+           d_brent    = brent - lag(brent), d_brent_l1 = lag(d_brent),
+           d_usd      = usd - lag(usd),     d_usd_l1   = lag(d_usd))
+  b     <- coef(lm(ecm_formula(1), data = d))
+  last  <- tail(d, 1)
+  level <- last$oil
+  ect   <- residuals(lr)[t]
+  d_oil_prev <- last$d_oil; d_brent_prev <- last$d_brent; d_usd_prev <- last$d_usd
+  out <- numeric(h)
+  for (i in 1:h) {
+    # d_brent = d_usd = 0 in the forecast quarters
+    d_oil <- b[["(Intercept)"]] + b[["ect_l1"]] * ect + b[["d_oil_l1"]] * d_oil_prev +
+             b[["d_brent_l1"]] * d_brent_prev + b[["d_usd_l1"]] * d_usd_prev
+    level <- level + d_oil
+    ect   <- level - predict(lr, newdata = tibble(brent = last$brent, usd = last$usd,
+                                                  trend = last$trend + i))
+    d_oil_prev <- d_oil; d_brent_prev <- 0; d_usd_prev <- 0
+    out[i] <- level
+  }
+  out
+}
+
+y_oil <- ts(oil$oil, start = c(2000, 1), frequency = 4)
+oil_errors <- map(origins, \(t) {
+  n_h   <- min(h_max, n_obs - t)
+  f_ecm <- ecm_forecast(t, n_h)
+  f_ar1 <- forecast(Arima(window(y_oil, end = time(y_oil)[t]), order = c(1, 1, 0),
+                          include.drift = TRUE), h = n_h)$mean
+  tibble(block = "Oil (ECM)", origin = sample_2000$date[t], h = 1:n_h,
+         e_model = oil$oil[t + 1:n_h] - f_ecm,
+         e_ar1   = oil$oil[t + 1:n_h] - as.numeric(f_ar1))
+}) %>% list_rbind()
+
+# --- 3. Accuracy: RMSE, ratio to AR(1), Diebold-Mariano test ---
+# ratio < 1: our model beats the AR(1).
+# DM test: H0 = both models are equally accurate (squared errors).
+oos_errors <- bind_rows(arima_errors, oil_errors)
+
+oos_errors %>%
+  filter(h %in% c(1, 4)) %>%
+  group_by(block, h) %>%
+  summarise(n          = n(),
+            rmse_model = sqrt(mean(e_model^2)),
+            rmse_ar1   = sqrt(mean(e_ar1^2)),
+            ratio      = rmse_model / rmse_ar1,
+            dm_p       = dm.test(e_model, e_ar1, h = first(h), power = 2)$p.value,
+            .groups = "drop") %>%
+  mutate(across(where(is.double), ~ round(.x, 3))) %>%
+  as.data.frame()
+```
+
+We evaluate the models by pseudo out-of-sample forecasting from 2015Q4, re-estimating each model every quarter on the data available at the time. About 40 forecasts per block are compared with an AR(1) benchmark.
+
+- **Imported and domestic goods** outperform the AR(1) one quarter ahead: errors are 30–40 % smaller, and the difference is significant (DM p = 0.002 and 0.016). The gain comes from the seasonal term, which the AR(1) does not include. Four quarters ahead our models remain better (ratios 0.88 and 0.94), but not significantly, as the seasonal pattern largely cancels over a full year.
+- **Oil products (ECM)** are forecast better than with the AR(1) at both horizons (ratios 0.92 and 0.95), but not significantly. Oil prices are difficult to forecast, and we assume constant Brent and USD after each origin.
+- **Rents** show no gain over the AR(1): both models perform equally, consistent with the absence of seasonality in rents.
+
+With about 40 forecasts the DM test has limited power, and the evaluation window includes the 2021–2023 inflation surge, which none of the models anticipated.
+
+
+
