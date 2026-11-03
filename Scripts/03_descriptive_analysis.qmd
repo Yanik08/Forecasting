@@ -1,7 +1,9 @@
 ---
-title: "Descriptive analysis and model selection"
-format: html
-editor: visual
+   title: "Descriptive analysis and model selection"
+   format:
+     html:
+       embed-resources: true
+   editor: visual
 ---
 
 # Descriptive analysis and model selection
