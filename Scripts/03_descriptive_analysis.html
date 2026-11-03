@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Descriptive analysis and model selection</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="03_descriptive_analysis_files/libs/clipboard/clipboard.min.js"></script>
+<script src="03_descriptive_analysis_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="03_descriptive_analysis_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="03_descriptive_analysis_files/libs/quarto-html/popper.min.js"></script>
+<script src="03_descriptive_analysis_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="03_descriptive_analysis_files/libs/quarto-html/anchor.min.js"></script>
+<link href="03_descriptive_analysis_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="03_descriptive_analysis_files/libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="03_descriptive_analysis_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="03_descriptive_analysis_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="03_descriptive_analysis_files/libs/bootstrap/bootstrap-917079515d91bccb85b543faf8aa8bb6.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Descriptive analysis and model selection</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="descriptive-analysis-and-model-selection" class="level1">
+<h1>Descriptive analysis and model selection</h1>
+<p>This file comes after <code>02_dta_cleaning.qmd</code>. It only reads the quarterly data built there and does descriptive analysis and model selection. No data is built or changed here.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(here)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>here() starts at /Users/yanik/Forecasting</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.1.4     ✔ readr     2.1.5
+✔ forcats   1.0.1     ✔ stringr   1.5.2
+✔ ggplot2   4.0.0     ✔ tibble    3.3.0
+✔ lubridate 1.9.5     ✔ tidyr     1.3.1
+✔ purrr     1.1.0     </code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(urca)       <span class="co"># ur.df() (ADF), ur.kpss() (KPSS)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(forecast)   <span class="co"># nsdiffs()</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>clean_dir <span class="ot">&lt;-</span> <span class="fu">here</span>(<span class="st">"DTA_CLEAN"</span>)</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Quarterly data built in 02: headline CPI, the 4 blocks and the oil drivers</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>quarterly <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">file.path</span>(clean_dir, <span class="st">"quarterly_data.csv"</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Logs x 100 of every series: a first difference is then (approximately)</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co"># the quarterly change in %</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>quarterly <span class="ot">&lt;-</span> quarterly <span class="sc">%&gt;%</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="sc">-</span>date, <span class="sc">~</span> <span class="dv">100</span> <span class="sc">*</span> <span class="fu">log</span>(.x), <span class="at">.names =</span> <span class="st">"l_{.col}"</span>))</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Check: period covered, number of quarters, columns</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="fu">range</span>(quarterly<span class="sc">$</span>date)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "1987-10-01" "2026-07-01"</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(quarterly)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 156</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(quarterly)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> [1] "date"            "cpi_total"       "cpi_oil"         "cpi_rent"       
+ [5] "cpi_imp_xoil"    "cpi_dom_xrent"   "w_rent"          "w_oil"          
+ [9] "w_domestic"      "w_imported"      "brent_usd"       "chf_per_usd"    
+[13] "brent_chf"       "l_cpi_total"     "l_cpi_oil"       "l_cpi_rent"     
+[17] "l_cpi_imp_xoil"  "l_cpi_dom_xrent" "l_w_rent"        "l_w_oil"        
+[21] "l_w_domestic"    "l_w_imported"    "l_brent_usd"     "l_chf_per_usd"  
+[25] "l_brent_chf"    </code></pre>
+</div>
+</div>
+</section>
+<section id="overview-of-the-series" class="level1">
+<h1>1. Overview of the series</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Readable names for the 5 series (headline + 4 blocks)</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>block_names <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">l_cpi_total     =</span> <span class="st">"Headline CPI"</span>,</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>                 <span class="at">l_cpi_oil       =</span> <span class="st">"Oil products"</span>,</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>                 <span class="at">l_cpi_rent      =</span> <span class="st">"Rents"</span>,</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>                 <span class="at">l_cpi_imp_xoil  =</span> <span class="st">"Imported excl. oil"</span>,</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>                 <span class="at">l_cpi_dom_xrent =</span> <span class="st">"Domestic excl. rents"</span>)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Long format (one row per quarter and series), with the quarterly change</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="co"># (q-o-q) and the change over 4 quarters (y-o-y), both in %</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>inflation <span class="ot">&lt;-</span> quarterly <span class="sc">%&gt;%</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(date, <span class="fu">all_of</span>(<span class="fu">names</span>(block_names))) <span class="sc">%&gt;%</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="sc">-</span>date, <span class="at">names_to =</span> <span class="st">"series"</span>, <span class="at">values_to =</span> <span class="st">"log_index"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(series) <span class="sc">%&gt;%</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">qoq =</span> log_index <span class="sc">-</span> <span class="fu">lag</span>(log_index),</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>         <span class="at">yoy =</span> log_index <span class="sc">-</span> <span class="fu">lag</span>(log_index, <span class="dv">4</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">series =</span> <span class="fu">factor</span>(block_names[series], <span class="at">levels =</span> block_names))</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Levels: trends and breaks</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(inflation, <span class="fu">aes</span>(date, log_index)) <span class="sc">+</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> series, <span class="at">scales =</span> <span class="st">"free_y"</span>, <span class="at">ncol =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"CPI blocks, 100 x log(index)"</span>, <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="cn">NULL</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="03_descriptive_analysis_files/figure-html/unnamed-chunk-2-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Year-on-year inflation: the deflation episodes and the 2022 surge</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">filter</span>(inflation, <span class="sc">!</span><span class="fu">is.na</span>(yoy)), <span class="fu">aes</span>(date, yoy)) <span class="sc">+</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">colour =</span> <span class="st">"grey50"</span>) <span class="sc">+</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> series, <span class="at">scales =</span> <span class="st">"free_y"</span>, <span class="at">ncol =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Year-on-year inflation, in %"</span>, <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="cn">NULL</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="03_descriptive_analysis_files/figure-html/unnamed-chunk-2-2.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<ol type="1">
+<li><p>Two regimes: the early 1990s, then low inflation. Every block has high inflation from 1989 to 1993: rents up to 10 %, headline about 6 %. After that, inflation stays below 3 %. The early 1990s don’t look like the rest of the sample, which is a good argument for starting the estimation sample in the late 1990s or 2000.</p></li>
+<li><p>The deflation period is visible. It’s strongest in imported excl. oil: its level drops by about 12 % between 2011 and 2016, and its y/y inflation reaches −5 % in 2012. That’s the strong franc. Headline and domestic excl. rents are also slightly negative over 2012–2016 and in 2020.</p></li>
+<li><p>Seasonality in imported excl. oil, but only from 2000 to about 2015. Look at the zig-zag in its level panel. It’s mostly clothing and shoes, whose prices fall during the January and July sales. Before 2000 the BFS didn’t record sale prices, so there’s no zig-zag. After about 2015 it gets weaker. So that seasonal pattern changes over the sample, which matters for the seasonality chunk.</p></li>
+<li><p>Rents rise smoothly. There are no breaks and no seasonality, and growth is almost constant after 1995, just slower in 2010–2020. It will be the easiest ARIMA.</p></li>
+<li><p>Oil is very volatile. It moves between −40 % and +35 % y/y, with crashes in 2009, 2015 and 2020, and spikes in 2000, 2008 and 2022. That’s why it gets its own model with Brent and the USD rate.</p></li>
+<li><p>Inflation in 2021–2023 was a common shock that shows up in every block, followed by a fall back to about 0–1.5 %.</p></li>
+</ol>
+</section>
+<section id="descriptive-statistics" class="level1">
+<h1>2. Descriptive statistics</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Sub-periods seen in the plots</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>inflation <span class="ot">&lt;-</span> inflation <span class="sc">%&gt;%</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">period =</span> <span class="fu">case_when</span>(<span class="fu">year</span>(date) <span class="sc">&lt;=</span> <span class="dv">1993</span> <span class="sc">~</span> <span class="st">"1988-1993 high inflation"</span>,</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">year</span>(date) <span class="sc">&lt;=</span> <span class="dv">2008</span> <span class="sc">~</span> <span class="st">"1994-2008 low inflation"</span>,</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">year</span>(date) <span class="sc">&lt;=</span> <span class="dv">2016</span> <span class="sc">~</span> <span class="st">"2009-2016 strong franc"</span>,</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">year</span>(date) <span class="sc">&lt;=</span> <span class="dv">2020</span> <span class="sc">~</span> <span class="st">"2017-2020"</span>,</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>                            <span class="cn">TRUE</span>               <span class="sc">~</span> <span class="st">"2021-2026 surge and fall"</span>))</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Quarterly inflation (q-o-q, in %), whole sample from 2000</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>inflation <span class="sc">%&gt;%</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">year</span>(date) <span class="sc">&gt;=</span> <span class="dv">2000</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(series) <span class="sc">%&gt;%</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">quarters =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(qoq)),</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>            <span class="at">mean     =</span> <span class="fu">mean</span>(qoq),</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>            <span class="at">sd       =</span> <span class="fu">sd</span>(qoq),</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>            <span class="at">min      =</span> <span class="fu">min</span>(qoq),</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>            <span class="at">max      =</span> <span class="fu">max</span>(qoq),</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>            <span class="at">share_negative =</span> <span class="fu">mean</span>(qoq <span class="sc">&lt;</span> <span class="dv">0</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">2</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 5 × 7
+  series               quarters  mean    sd    min   max share_negative
+  &lt;fct&gt;                   &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt;          &lt;dbl&gt;
+1 Headline CPI              107  0.15  0.58  -1.36  1.64           0.46
+2 Oil products              107  0.68  6.54 -23.1  17.0            0.4 
+3 Rents                     107  0.35  0.28  -0.26  1.15           0.08
+4 Imported excl. oil        107 -0.12  1.89  -3.66  3.29           0.55
+5 Domestic excl. rents      107  0.15  0.37  -0.66  1.81           0.32</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Mean year-on-year inflation (in %) by sub-period</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>inflation <span class="sc">%&gt;%</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(yoy)) <span class="sc">%&gt;%</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(series, period) <span class="sc">%&gt;%</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_yoy =</span> <span class="fu">round</span>(<span class="fu">mean</span>(yoy), <span class="dv">2</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> series, <span class="at">values_from =</span> mean_yoy) <span class="sc">%&gt;%</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()          <span class="co"># data.frame shows all columns</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                    period Headline CPI Oil products Rents Imported excl. oil
+1 1988-1993 high inflation         4.14         4.26  6.43               2.29
+2  1994-2008 low inflation         0.98         4.92  1.27              -0.17
+3   2009-2016 strong franc        -0.26        -4.15  1.04              -1.80
+4                2017-2020         0.27         0.55  0.73               0.07
+5 2021-2026 surge and fall         1.23         5.58  1.87               0.55
+  Domestic excl. rents
+1                 4.02
+2                 0.99
+3                 0.18
+4                 0.17
+5                 1.05</code></pre>
+</div>
+</div>
+<p>The blocks behave very differently, which justifies modelling them separately. Oil is very volatile: its standard deviation is 23 times that of rents. Rents are stable and almost always rising (only 8 % of quarters are negative). Imported excl. oil falls more often than it rises.</p>
+<p>Imported excl. oil has a negative average (−0.12 % per quarter). The second table shows where it comes from: the strong-franc period 2009–2016 (−1.8 % y/y). In the other periods it’s close to zero or positive. This is the bias your coworker mentioned. An ARIMA with drift estimated from 2000 would carry this negative average into the forecast. It needs to be dealt with in model selection: a dummy for 2009–2016, or no drift.</p>
+<p>Imported excl. oil is volatile (sd 1.89) for a non-energy block. Its y/y inflation is much smoother, so most of that volatility is the seasonal zig-zag from sales, not real inflation. The next chunk tests this.</p>
+<p>The early 1990s are a different world, with inflation four to five times higher in every block. This supports starting the estimation sample after them, around 2000, rather than in 1988.</p>
+</section>
+<section id="seasonality" class="level1">
+<h1>3. Seasonality</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Seasonality test for one block on one sample: regress q-o-q inflation on</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="co"># quarter dummies; F-test H0 = "all quarters have the same mean inflation"</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>seasonal_test <span class="ot">&lt;-</span> <span class="cf">function</span>(data) {</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(qoq <span class="sc">~</span> <span class="fu">factor</span>(<span class="fu">quarter</span>(date)), <span class="at">data =</span> data)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  f   <span class="ot">&lt;-</span> <span class="fu">summary</span>(fit)<span class="sc">$</span>fstatistic</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">f_stat  =</span> <span class="fu">round</span>(f[[<span class="st">"value"</span>]], <span class="dv">2</span>),</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>         <span class="at">p_value =</span> <span class="fu">round</span>(<span class="fu">pf</span>(f[[<span class="st">"value"</span>]], f[[<span class="st">"numdf"</span>]], f[[<span class="st">"dendf"</span>]], <span class="at">lower.tail =</span> <span class="cn">FALSE</span>), <span class="dv">4</span>),</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">r2      =</span> <span class="fu">round</span>(<span class="fu">summary</span>(fit)<span class="sc">$</span>r.squared, <span class="dv">2</span>))</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Test on the sample from 2000, and on two halves to see if the pattern changed</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>seasonality <span class="ot">&lt;-</span> inflation <span class="sc">%&gt;%</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">year</span>(date) <span class="sc">&gt;=</span> <span class="dv">2000</span>, <span class="sc">!</span><span class="fu">is.na</span>(qoq)) <span class="sc">%&gt;%</span></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">sample =</span> <span class="fu">if_else</span>(<span class="fu">year</span>(date) <span class="sc">&lt;=</span> <span class="dv">2012</span>, <span class="st">"2000-2012"</span>, <span class="st">"2013-2026"</span>))</span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>  seasonality <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">sample =</span> <span class="st">"2000-2026"</span>),</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>  seasonality) <span class="sc">%&gt;%</span></span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(series, sample) <span class="sc">%&gt;%</span></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_modify</span>(<span class="sc">~</span> <span class="fu">seasonal_test</span>(.x)) <span class="sc">%&gt;%</span></span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                 series    sample f_stat p_value   r2
+1          Headline CPI 2000-2012  26.17  0.0000 0.62
+2          Headline CPI 2000-2026  25.68  0.0000 0.43
+3          Headline CPI 2013-2026  10.91  0.0000 0.39
+4          Oil products 2000-2012   2.42  0.0775 0.13
+5          Oil products 2000-2026   3.81  0.0124 0.10
+6          Oil products 2013-2026   1.33  0.2759 0.07
+7                 Rents 2000-2012   1.60  0.2016 0.09
+8                 Rents 2000-2026   0.64  0.5916 0.02
+9                 Rents 2013-2026   0.14  0.9325 0.01
+10   Imported excl. oil 2000-2012  66.15  0.0000 0.81
+11   Imported excl. oil 2000-2026  70.20  0.0000 0.67
+12   Imported excl. oil 2013-2026  42.15  0.0000 0.71
+13 Domestic excl. rents 2000-2012  21.91  0.0000 0.58
+14 Domestic excl. rents 2000-2026  27.11  0.0000 0.44
+15 Domestic excl. rents 2013-2026  17.05  0.0000 0.50</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Mean q-o-q inflation by quarter: the seasonal pattern itself</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>seasonality <span class="sc">%&gt;%</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(series, sample, <span class="at">q =</span> <span class="fu">paste0</span>(<span class="st">"Q"</span>, <span class="fu">quarter</span>(date))) <span class="sc">%&gt;%</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_qoq =</span> <span class="fu">round</span>(<span class="fu">mean</span>(qoq), <span class="dv">2</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> q, <span class="at">values_from =</span> mean_qoq) <span class="sc">%&gt;%</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                 series    sample    Q1   Q2    Q3    Q4
+1          Headline CPI 2000-2012 -0.13 0.86 -0.51  0.47
+2          Headline CPI 2013-2026  0.11 0.60 -0.10 -0.11
+3          Oil products 2000-2012 -1.46 5.02  1.71 -0.89
+4          Oil products 2013-2026 -1.48 2.64  0.71 -0.81
+5                 Rents 2000-2012  0.51 0.40  0.26  0.35
+6                 Rents 2013-2026  0.29 0.33  0.34  0.30
+7    Imported excl. oil 2000-2012 -1.98 1.95 -2.64  1.84
+8    Imported excl. oil 2013-2026 -0.82 1.56 -1.13  0.23
+9  Domestic excl. rents 2000-2012  0.52 0.24 -0.12  0.05
+10 Domestic excl. rents 2013-2026  0.50 0.23  0.10 -0.33</code></pre>
+</div>
+</div>
+</section>
+<section id="stationarity" class="level1">
+<h1>4. Stationarity</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Series to test, from 2000Q1: the 4 blocks and the 3 oil-ECM variables</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>test_vars <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"l_cpi_oil"</span>, <span class="st">"l_cpi_rent"</span>, <span class="st">"l_cpi_imp_xoil"</span>, <span class="st">"l_cpi_dom_xrent"</span>,</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>               <span class="st">"l_brent_usd"</span>, <span class="st">"l_chf_per_usd"</span>, <span class="st">"l_brent_chf"</span>)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>sample_2000 <span class="ot">&lt;-</span> quarterly <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="fu">year</span>(date) <span class="sc">&gt;=</span> <span class="dv">2000</span>)</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>qtr <span class="ot">&lt;-</span> <span class="fu">factor</span>(<span class="fu">quarter</span>(sample_2000<span class="sc">$</span>date))</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Remove the seasonal pattern before testing (subtract the mean of each</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="co"># quarter): the ADF and KPSS tests assume no seasonality, and a seasonal</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="co"># zig-zag makes them unreliable.</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>deseason <span class="ot">&lt;-</span> <span class="cf">function</span>(x, q) x <span class="sc">-</span> <span class="fu">ave</span>(x, q) <span class="sc">+</span> <span class="fu">mean</span>(x)</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a><span class="co"># ADF:  H0 = unit root (non-stationary). Reject if stat &lt; 5% critical value.</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a><span class="co"># KPSS: H0 = stationary.                 Reject if stat &gt; 5% critical value.</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Levels: with constant and trend. First differences: with constant only.</span></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a><span class="co"># ADF lags chosen by BIC (max 4 = one year).</span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>unit_root_tests <span class="ot">&lt;-</span> <span class="cf">function</span>(x, q) {</span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>  lvl <span class="ot">&lt;-</span> <span class="fu">deseason</span>(x, q)</span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>  dif <span class="ot">&lt;-</span> <span class="fu">deseason</span>(<span class="fu">diff</span>(x), q[<span class="sc">-</span><span class="dv">1</span>])</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>  adf_l  <span class="ot">&lt;-</span> <span class="fu">ur.df</span>(lvl, <span class="at">type =</span> <span class="st">"trend"</span>, <span class="at">lags =</span> <span class="dv">4</span>, <span class="at">selectlags =</span> <span class="st">"BIC"</span>)</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>  adf_d  <span class="ot">&lt;-</span> <span class="fu">ur.df</span>(dif, <span class="at">type =</span> <span class="st">"drift"</span>, <span class="at">lags =</span> <span class="dv">4</span>, <span class="at">selectlags =</span> <span class="st">"BIC"</span>)</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>  kpss_l <span class="ot">&lt;-</span> <span class="fu">ur.kpss</span>(lvl, <span class="at">type =</span> <span class="st">"tau"</span>)</span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>  kpss_d <span class="ot">&lt;-</span> <span class="fu">ur.kpss</span>(dif, <span class="at">type =</span> <span class="st">"mu"</span>)</span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">adf_level   =</span> adf_l<span class="sc">@</span>teststat[<span class="dv">1</span>],  <span class="at">adf_level_cv5  =</span> adf_l<span class="sc">@</span>cval[<span class="dv">1</span>, <span class="st">"5pct"</span>],</span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>         <span class="at">kpss_level  =</span> kpss_l<span class="sc">@</span>teststat,    <span class="at">kpss_level_cv5 =</span> kpss_l<span class="sc">@</span>cval[<span class="dv">1</span>, <span class="st">"5pct"</span>],</span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>         <span class="at">adf_diff    =</span> adf_d<span class="sc">@</span>teststat[<span class="dv">1</span>],  <span class="at">adf_diff_cv5   =</span> adf_d<span class="sc">@</span>cval[<span class="dv">1</span>, <span class="st">"5pct"</span>],</span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>         <span class="at">kpss_diff   =</span> kpss_d<span class="sc">@</span>teststat,    <span class="at">kpss_diff_cv5  =</span> kpss_d<span class="sc">@</span>cval[<span class="dv">1</span>, <span class="st">"5pct"</span>],</span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>         <span class="co"># number of seasonal differences needed (OCSB test, raw series)</span></span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a>         <span class="at">seasonal_diffs =</span> <span class="fu">nsdiffs</span>(<span class="fu">ts</span>(x, <span class="at">frequency =</span> <span class="dv">4</span>), <span class="at">test =</span> <span class="st">"ocsb"</span>))</span>
+<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a>unit_roots <span class="ot">&lt;-</span> <span class="fu">map</span>(test_vars, \(v) <span class="fu">unit_root_tests</span>(sample_2000[[v]], qtr)) <span class="sc">%&gt;%</span></span>
+<span id="cb22-33"><a href="#cb22-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb22-34"><a href="#cb22-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">series =</span> test_vars, <span class="at">.before =</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb22-35"><a href="#cb22-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">level_stationary =</span> adf_level <span class="sc">&lt;</span> adf_level_cv5 <span class="sc">&amp;</span> kpss_level <span class="sc">&lt;</span> kpss_level_cv5,</span>
+<span id="cb22-36"><a href="#cb22-36" aria-hidden="true" tabindex="-1"></a>         <span class="at">diff_stationary  =</span> adf_diff  <span class="sc">&lt;</span> adf_diff_cv5  <span class="sc">&amp;</span> kpss_diff  <span class="sc">&lt;</span> kpss_diff_cv5,</span>
+<span id="cb22-37"><a href="#cb22-37" aria-hidden="true" tabindex="-1"></a>         <span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">2</span>)))</span>
+<span id="cb22-38"><a href="#cb22-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-39"><a href="#cb22-39" aria-hidden="true" tabindex="-1"></a>unit_roots <span class="sc">%&gt;%</span> <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           series adf_level adf_level_cv5 kpss_level kpss_level_cv5 adf_diff
+1       l_cpi_oil     -3.14         -3.43       0.19           0.15    -6.73
+2      l_cpi_rent     -2.13         -3.43       0.30           0.15    -3.55
+3  l_cpi_imp_xoil     -2.11         -3.43       0.31           0.15    -2.97
+4 l_cpi_dom_xrent     -3.63         -3.43       0.24           0.15    -2.92
+5     l_brent_usd     -2.61         -3.43       0.30           0.15    -6.90
+6   l_chf_per_usd     -2.57         -3.43       0.41           0.15    -6.76
+7     l_brent_chf     -2.75         -3.43       0.24           0.15    -6.92
+  adf_diff_cv5 kpss_diff kpss_diff_cv5 seasonal_diffs level_stationary
+1        -2.88      0.04          0.46              0            FALSE
+2        -2.88      0.19          0.46              0            FALSE
+3        -2.88      0.21          0.46              1            FALSE
+4        -2.88      0.19          0.46              0            FALSE
+5        -2.88      0.07          0.46              0            FALSE
+6        -2.88      0.15          0.46              0            FALSE
+7        -2.88      0.05          0.46              0            FALSE
+  diff_stationary
+1            TRUE
+2            TRUE
+3            TRUE
+4            TRUE
+5            TRUE
+6            TRUE
+7            TRUE</code></pre>
+</div>
+</div>
+<p>Every series is I(1): non-stationary in levels, stationary in first differences. So all three ARIMA blocks use d = 1: we model quarterly inflation, not the price level. This is the standard result for price indices.</p>
+<p>Domestic excl. rents is a borderline case in levels. The ADF rejects the unit root (−3.63 &lt; −3.43), but the KPSS rejects stationarity. When the two tests disagree, the cautious choice is to difference. A wrongly undifferenced model gives badly biased long forecasts, while an unnecessary difference costs little.</p>
+<p>Imported and domestic are only just stationary in differences (−2.97 and −2.92 vs −2.88). That fits the plots: their inflation stays away from its mean for long stretches (the strong-franc years, the 2022 surge). In the ARIMA this shows up as AR terms, and possibly the 2009–2016 dummy.</p>
+<p>Imported excl. oil: the OCSB test asks for a seasonal difference. It confirms what we saw in chunk 4: the seasonal pattern isn’t fixed but shrinks over time. So in model selection we compare two options for this block: a seasonal difference (D = 1), or a seasonal AR term on top of d = 1.</p>
+<p>Oil block: oil products, Brent and the exchange rate are all I(1). That’s exactly the condition for testing cointegration, a stable long-run link in levels, which justifies the ECM.</p>
+</section>
+<section id="model-selection-arima-blocks" class="level1">
+<h1>5. Model selection: ARIMA blocks</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># The three ARIMA blocks, as quarterly time series from 2000Q1</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>arima_vars <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">Rents                  =</span> <span class="st">"l_cpi_rent"</span>,</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>                <span class="st">`</span><span class="at">Imported excl. oil</span><span class="st">`</span>   <span class="ot">=</span> <span class="st">"l_cpi_imp_xoil"</span>,</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>                <span class="st">`</span><span class="at">Domestic excl. rents</span><span class="st">`</span> <span class="ot">=</span> <span class="st">"l_cpi_dom_xrent"</span>)</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>to_ts <span class="ot">&lt;-</span> <span class="cf">function</span>(v) <span class="fu">ts</span>(sample_2000[[v]], <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">2000</span>, <span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">4</span>)</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Candidate models: ARIMA(p,1,q)(P,0,0)[4] with drift,</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="co"># p = 0..3, q = 0..2, P = 0 (no seasonal term) or 1 (seasonal AR)</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(<span class="at">p =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">3</span>, <span class="at">q =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">2</span>, <span class="at">P =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>)</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>fit_grid <span class="ot">&lt;-</span> <span class="cf">function</span>(y) {</span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pmap</span>(grid, \(p, q, P) {</span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>    fit <span class="ot">&lt;-</span> <span class="fu">tryCatch</span>(<span class="fu">Arima</span>(y, <span class="at">order =</span> <span class="fu">c</span>(p, <span class="dv">1</span>, q), <span class="at">seasonal =</span> <span class="fu">c</span>(P, <span class="dv">0</span>, <span class="dv">0</span>),</span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>                          <span class="at">include.drift =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>                    <span class="at">error =</span> <span class="cf">function</span>(e) <span class="cn">NULL</span>)</span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">is.null</span>(fit)) <span class="fu">return</span>(<span class="cn">NULL</span>)</span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">tibble</span>(<span class="at">p =</span> p, <span class="at">q =</span> q, <span class="at">P =</span> P,</span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>           <span class="at">aicc =</span> fit<span class="sc">$</span>aic, <span class="at">bic =</span> fit<span class="sc">$</span>bic,</span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>           <span class="co"># Ljung-Box on residuals, 8 lags (2 years): H0 = no autocorrelation</span></span>
+<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a>           <span class="at">lb_p =</span> <span class="fu">Box.test</span>(<span class="fu">residuals</span>(fit), <span class="at">lag =</span> <span class="dv">8</span>, <span class="at">type =</span> <span class="st">"Ljung-Box"</span>,</span>
+<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a>                           <span class="at">fitdf =</span> p <span class="sc">+</span> q <span class="sc">+</span> P)<span class="sc">$</span>p.value)</span>
+<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>  }) <span class="sc">%&gt;%</span> <span class="fu">list_rbind</span>()</span>
+<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-26"><a href="#cb24-26" aria-hidden="true" tabindex="-1"></a>arima_grid <span class="ot">&lt;-</span> <span class="fu">imap</span>(arima_vars, \(v, name) <span class="fu">fit_grid</span>(<span class="fu">to_ts</span>(v)) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">block =</span> name)) <span class="sc">%&gt;%</span></span>
+<span id="cb24-27"><a href="#cb24-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb24-28"><a href="#cb24-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">relocate</span>(block)</span>
+<span id="cb24-29"><a href="#cb24-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-30"><a href="#cb24-30" aria-hidden="true" tabindex="-1"></a><span class="co"># Best 3 models by BIC in each block</span></span>
+<span id="cb24-31"><a href="#cb24-31" aria-hidden="true" tabindex="-1"></a>arima_grid <span class="sc">%&gt;%</span></span>
+<span id="cb24-32"><a href="#cb24-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(block) <span class="sc">%&gt;%</span></span>
+<span id="cb24-33"><a href="#cb24-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_min</span>(bic, <span class="at">n =</span> <span class="dv">3</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb24-34"><a href="#cb24-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(aicc, bic, lb_p), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb24-35"><a href="#cb24-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                 block p q P    aicc     bic  lb_p
+1 Domestic excl. rents 0 0 1  21.961  29.951 0.112
+2 Domestic excl. rents 1 0 1  19.553  30.206 0.620
+3 Domestic excl. rents 0 1 1  20.356  31.010 0.481
+4   Imported excl. oil 2 1 1 245.274 261.255 0.641
+5   Imported excl. oil 3 1 1 247.272 265.916 0.470
+6   Imported excl. oil 2 2 1 247.272 265.916 0.470
+7                Rents 1 1 1 -34.295 -20.978 0.743
+8                Rents 0 1 1 -31.407 -20.754 0.289
+9                Rents 3 0 0 -33.944 -20.627 0.834</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-estimate the best model by BIC of each block and show its coefficients</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>best <span class="ot">&lt;-</span> arima_grid <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(block) <span class="sc">%&gt;%</span> <span class="fu">slice_min</span>(bic, <span class="at">n =</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="fu">ungroup</span>()</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>best_fits <span class="ot">&lt;-</span> <span class="fu">pmap</span>(best, \(block, p, q, P, ...) {</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Arima</span>(<span class="fu">to_ts</span>(arima_vars[[block]]), <span class="at">order =</span> <span class="fu">c</span>(p, <span class="dv">1</span>, q), <span class="at">seasonal =</span> <span class="fu">c</span>(P, <span class="dv">0</span>, <span class="dv">0</span>),</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>        <span class="at">include.drift =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span> <span class="fu">set_names</span>(best<span class="sc">$</span>block)</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="fu">imap</span>(best_fits, \(fit, name) {</span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> name, <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(fit)),</span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">estimate =</span> <span class="fu">coef</span>(fit), <span class="at">se =</span> <span class="fu">sqrt</span>(<span class="fu">diag</span>(fit<span class="sc">$</span>var.coef))) <span class="sc">%&gt;%</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">t =</span> estimate <span class="sc">/</span> se)</span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                  block  term estimate    se      t
+1  Domestic excl. rents  sar1    0.725 0.066 10.950
+2  Domestic excl. rents drift    0.149 0.083  1.789
+3    Imported excl. oil   ar1   -0.701 0.111 -6.331
+4    Imported excl. oil   ar2    0.273 0.105  2.590
+5    Imported excl. oil   ma1    0.736 0.079  9.270
+6    Imported excl. oil  sar1    0.514 0.093  5.520
+7    Imported excl. oil drift   -0.140 0.167 -0.839
+8                 Rents   ar1    0.329 0.138  2.384
+9                 Rents   ma1    0.529 0.140  3.787
+10                Rents  sar1    0.272 0.101  2.702
+11                Rents drift    0.357 0.058  6.126</code></pre>
+</div>
+</div>
+<p>Rents: ARIMA(1,1,1)(1,0,0) + drift.</p>
+<p>Every coefficient is significant, and the residuals are clean (Ljung-Box p = 0.74). The drift of 0.36 % per quarter means about 1.4 % per year of long-run rent inflation, which is plausible. The seasonal AR is significant (0.27) even though chunk 4 found no seasonal means. It captures something different: this quarter’s rent inflation is related to the same quarter last year. That fits rents being adjusted once a year, for example after reference-rate changes. The top 3 are very close in BIC, so the choice isn’t critical.</p>
+<p>Imported excl. oil: ARIMA(2,1,1)(1,0,0) + drift. Two issues:</p>
+<p>The drift is negative (−0.14 % per quarter) and not significant. This is the strong-franc bias from the earlier discussion. Over a long horizon, this model would forecast steadily falling import prices. Options: drop the drift, or add a 2009–2016 dummy, then compare the forecasts. ar1 = −0.70 and ma1 = +0.74 almost cancel each other. This is a classic sign of a common factor: the two terms partly offset, and the model may be more complex than it needs to be. A simpler model is worth checking. The seasonal difference that the OCSB test suggested is also still open. It can’t be compared by BIC, because a seasonal difference changes the data being fitted. It has to be compared by out-of-sample forecast accuracy instead.</p>
+<p>Domestic excl. rents: ARIMA(0,1,0)(1,0,0) + drift, the simplest possible.</p>
+<p>Inflation depends only on the same quarter last year (sar1 = 0.73), which is the strong, stable January pattern from chunk 4. The residuals pass, but only just (p = 0.11). The second model, (1,1,0)(1,0,0), has almost the same BIC (30.2 vs 30.0), a better AICc and cleaner residuals (p = 0.62). I’d pick (1,1,0)(1,0,0) and say so in the report. The drift of 0.15 % per quarter (about 0.6 % per year) is borderline significant (t = 1.8), and also pulled down by the strong-franc years.</p>
+<p>Overall: BIC gives a reasonable first choice. The two open points, the imported drift or dummy and whether a seasonal difference is better, are best settled by an out-of-sample forecast comparison (rolling forecasts, RMSE), which fits in the forecasting/evaluation file.</p>
+</section>
+<section id="oil-products-cointegration-and-ecm" class="level1">
+<h1>6. Oil products: cointegration and ECM</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Oil block variables (logs x 100), from 2000Q1</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>oil <span class="ot">&lt;-</span> sample_2000 <span class="sc">%&gt;%</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(date,</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">oil   =</span> l_cpi_oil,        <span class="co"># CPI oil products</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">brent =</span> l_brent_usd,      <span class="co"># Brent, USD per barrel</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">usd   =</span> l_chf_per_usd,    <span class="co"># CHF per USD</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">trend =</span> <span class="fu">row_number</span>())     <span class="co"># linear trend (1, 2, 3, ...)</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 1. Long-run relation (static regression in levels) ---</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Without and with a linear trend; the trend captures slowly rising</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a><span class="co"># taxes and margins (mineral oil tax, CO2 levy since 2008)</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>lr_const <span class="ot">&lt;-</span> <span class="fu">lm</span>(oil <span class="sc">~</span> brent <span class="sc">+</span> usd,         <span class="at">data =</span> oil)</span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>lr_trend <span class="ot">&lt;-</span> <span class="fu">lm</span>(oil <span class="sc">~</span> brent <span class="sc">+</span> usd <span class="sc">+</span> trend, <span class="at">data =</span> oil)</span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lr_const)<span class="sc">$</span>coefficients</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                Estimate Std. Error   t value     Pr(&gt;|t|)
+(Intercept) 308.84182584 9.37390732 32.946968 7.561118e-57
+brent         0.34359585 0.02216410 15.502361 8.554521e-29
+usd          -0.08575359 0.05127378 -1.672465 9.743855e-02</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lr_trend)<span class="sc">$</span>coefficients</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>               Estimate Std. Error  t value     Pr(&gt;|t|)
+(Intercept) 247.5791447 6.59724064 37.52768 6.817924e-62
+brent         0.4279193 0.01354313 31.59678 8.264146e-55
+usd           0.6136196 0.05412564 11.33695 8.002159e-20
+trend         0.4153891 0.02729778 15.21695 4.202882e-28</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 2. Engle-Granger test: is the long-run residual stationary? ---</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ADF on the residuals, no constant (they have mean 0 by construction).</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Critical values are NOT the usual ADF ones: the residuals come from an</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a><span class="co"># estimated regression. MacKinnon (2010), 3 variables, 5% level:</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="co"># -3.74 (constant), -4.10 (constant + trend).</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>eg_stat <span class="ot">&lt;-</span> <span class="cf">function</span>(fit) {</span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ur.df</span>(<span class="fu">residuals</span>(fit), <span class="at">type =</span> <span class="st">"none"</span>, <span class="at">lags =</span> <span class="dv">4</span>, <span class="at">selectlags =</span> <span class="st">"BIC"</span>)<span class="sc">@</span>teststat[<span class="dv">1</span>]</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">long_run =</span> <span class="fu">c</span>(<span class="st">"constant"</span>, <span class="st">"constant + trend"</span>),</span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">eg_stat  =</span> <span class="fu">c</span>(<span class="fu">eg_stat</span>(lr_const), <span class="fu">eg_stat</span>(lr_trend)),</span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">cv_5pct  =</span> <span class="fu">c</span>(<span class="sc">-</span><span class="fl">3.74</span>, <span class="sc">-</span><span class="fl">4.10</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cointegrated =</span> eg_stat <span class="sc">&lt;</span> cv_5pct)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 2 × 4
+  long_run         eg_stat cv_5pct cointegrated
+  &lt;chr&gt;              &lt;dbl&gt;   &lt;dbl&gt; &lt;lgl&gt;       
+1 constant           -2.85   -3.74 FALSE       
+2 constant + trend   -5.30   -4.1  TRUE        </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 3. Johansen trace test (system approach, robustness check) ---</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="co"># r = number of cointegrating relations; reject "r = 0" if stat &gt; critical value.</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="co"># K = 2 lags in levels, trend in the cointegrating relation, quarter dummies.</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>johansen <span class="ot">&lt;-</span> <span class="fu">ca.jo</span>(oil[, <span class="fu">c</span>(<span class="st">"oil"</span>, <span class="st">"brent"</span>, <span class="st">"usd"</span>)], <span class="at">type =</span> <span class="st">"trace"</span>,</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ecdet =</span> <span class="st">"trend"</span>, <span class="at">K =</span> <span class="dv">2</span>, <span class="at">season =</span> <span class="dv">4</span>)</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">stat =</span> <span class="fu">round</span>(johansen<span class="sc">@</span>teststat, <span class="dv">2</span>), johansen<span class="sc">@</span>cval)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          stat 10pct  5pct  1pct
+r &lt;= 2 |  6.26 10.49 12.25 16.26
+r &lt;= 1 | 16.92 22.76 25.32 30.45
+r = 0  | 37.80 39.06 42.44 48.45</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 4. Same effect of Brent and of the exchange rate? ---</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="co"># If b_brent = b_usd, only Brent in CHF matters. Re-parametrised so that the</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="co"># coefficient on usd is b_usd - b_brent: H0 = this coefficient is 0.</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(<span class="fu">lm</span>(oil <span class="sc">~</span> <span class="fu">I</span>(brent <span class="sc">+</span> usd) <span class="sc">+</span> usd <span class="sc">+</span> trend, <span class="at">data =</span> oil))<span class="sc">$</span>coefficients[<span class="st">"usd"</span>, ]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>    Estimate   Std. Error      t value     Pr(&gt;|t|) 
+1.857003e-01 4.545423e-02 4.085434e+00 8.722655e-05 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 5. ECM lag selection ---</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="co"># d_oil_t = c + alpha * ect_(t-1) + b * d_brent_t + g * d_usd_t</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a><span class="co">#           + L lags of d_oil, d_brent and d_usd</span></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="co"># ect = residual of the long-run relation with trend (deviation from equilibrium)</span></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>ecm_data <span class="ot">&lt;-</span> oil <span class="sc">%&gt;%</span></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">ect     =</span> <span class="fu">residuals</span>(lr_trend),</span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>         <span class="at">ect_l1  =</span> <span class="fu">lag</span>(ect),</span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">d_oil   =</span> oil   <span class="sc">-</span> <span class="fu">lag</span>(oil),</span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>         <span class="at">d_brent =</span> brent <span class="sc">-</span> <span class="fu">lag</span>(brent),</span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a>         <span class="at">d_usd   =</span> usd   <span class="sc">-</span> <span class="fu">lag</span>(usd))</span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>) {</span>
+<span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a>  ecm_data[[<span class="fu">paste0</span>(<span class="st">"d_oil_l"</span>,   i)]] <span class="ot">&lt;-</span> <span class="fu">lag</span>(ecm_data<span class="sc">$</span>d_oil,   i)</span>
+<span id="cb38-14"><a href="#cb38-14" aria-hidden="true" tabindex="-1"></a>  ecm_data[[<span class="fu">paste0</span>(<span class="st">"d_brent_l"</span>, i)]] <span class="ot">&lt;-</span> <span class="fu">lag</span>(ecm_data<span class="sc">$</span>d_brent, i)</span>
+<span id="cb38-15"><a href="#cb38-15" aria-hidden="true" tabindex="-1"></a>  ecm_data[[<span class="fu">paste0</span>(<span class="st">"d_usd_l"</span>,   i)]] <span class="ot">&lt;-</span> <span class="fu">lag</span>(ecm_data<span class="sc">$</span>d_usd,   i)</span>
+<span id="cb38-16"><a href="#cb38-16" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb38-17"><a href="#cb38-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-18"><a href="#cb38-18" aria-hidden="true" tabindex="-1"></a><span class="co"># All models on the same sample (lose the first 5 quarters), so BIC is comparable</span></span>
+<span id="cb38-19"><a href="#cb38-19" aria-hidden="true" tabindex="-1"></a>ecm_sample <span class="ot">&lt;-</span> ecm_data <span class="sc">%&gt;%</span> <span class="fu">slice</span>(<span class="dv">6</span><span class="sc">:</span><span class="fu">n</span>())</span>
+<span id="cb38-20"><a href="#cb38-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-21"><a href="#cb38-21" aria-hidden="true" tabindex="-1"></a>ecm_formula <span class="ot">&lt;-</span> <span class="cf">function</span>(L) {</span>
+<span id="cb38-22"><a href="#cb38-22" aria-hidden="true" tabindex="-1"></a>  lags <span class="ot">&lt;-</span> <span class="cf">if</span> (L <span class="sc">==</span> <span class="dv">0</span>) <span class="cn">NULL</span> <span class="cf">else</span> <span class="fu">paste0</span>(<span class="fu">c</span>(<span class="st">"d_oil_l"</span>, <span class="st">"d_brent_l"</span>, <span class="st">"d_usd_l"</span>), <span class="fu">rep</span>(<span class="dv">1</span><span class="sc">:</span>L, <span class="at">each =</span> <span class="dv">3</span>))</span>
+<span id="cb38-23"><a href="#cb38-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">reformulate</span>(<span class="fu">c</span>(<span class="st">"ect_l1"</span>, <span class="st">"d_brent"</span>, <span class="st">"d_usd"</span>, lags), <span class="at">response =</span> <span class="st">"d_oil"</span>)</span>
+<span id="cb38-24"><a href="#cb38-24" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb38-25"><a href="#cb38-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-26"><a href="#cb38-26" aria-hidden="true" tabindex="-1"></a><span class="fu">map</span>(<span class="dv">0</span><span class="sc">:</span><span class="dv">4</span>, \(L) {</span>
+<span id="cb38-27"><a href="#cb38-27" aria-hidden="true" tabindex="-1"></a>  fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(<span class="fu">ecm_formula</span>(L), <span class="at">data =</span> ecm_sample)</span>
+<span id="cb38-28"><a href="#cb38-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">lags    =</span> L,</span>
+<span id="cb38-29"><a href="#cb38-29" aria-hidden="true" tabindex="-1"></a>         <span class="at">bic     =</span> <span class="fu">BIC</span>(fit),</span>
+<span id="cb38-30"><a href="#cb38-30" aria-hidden="true" tabindex="-1"></a>         <span class="at">alpha   =</span> <span class="fu">coef</span>(fit)[[<span class="st">"ect_l1"</span>]],</span>
+<span id="cb38-31"><a href="#cb38-31" aria-hidden="true" tabindex="-1"></a>         <span class="at">t_alpha =</span> <span class="fu">summary</span>(fit)<span class="sc">$</span>coefficients[<span class="st">"ect_l1"</span>, <span class="st">"t value"</span>],</span>
+<span id="cb38-32"><a href="#cb38-32" aria-hidden="true" tabindex="-1"></a>         <span class="at">r2      =</span> <span class="fu">summary</span>(fit)<span class="sc">$</span>r.squared,</span>
+<span id="cb38-33"><a href="#cb38-33" aria-hidden="true" tabindex="-1"></a>         <span class="at">lb_p    =</span> <span class="fu">Box.test</span>(<span class="fu">residuals</span>(fit), <span class="at">lag =</span> <span class="dv">8</span>, <span class="at">type =</span> <span class="st">"Ljung-Box"</span>)<span class="sc">$</span>p.value)</span>
+<span id="cb38-34"><a href="#cb38-34" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
+<span id="cb38-35"><a href="#cb38-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb38-36"><a href="#cb38-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 5 × 6
+   lags   bic  alpha t_alpha    r2  lb_p
+  &lt;int&gt; &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+1     0  527. -0.621   -7.99 0.803 0.207
+2     1  515. -0.389   -4.28 0.848 0.729
+3     2  528. -0.39    -3.81 0.849 0.715
+4     3  538. -0.468   -4.14 0.854 0.948
+5     4  547. -0.494   -3.92 0.861 0.999</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Chosen ECM (1 lag), estimated on all available quarters</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>ecm_fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(<span class="fu">ecm_formula</span>(<span class="dv">1</span>), <span class="at">data =</span> ecm_data)</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(ecm_fit)<span class="sc">$</span>coefficients, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>            Estimate Std. Error t value Pr(&gt;|t|)
+(Intercept)    0.398      0.267   1.490    0.140
+ect_l1        -0.394      0.091  -4.349    0.000
+d_brent        0.309      0.017  17.991    0.000
+d_usd          0.539      0.078   6.903    0.000
+d_oil_l1       0.017      0.077   0.223    0.824
+d_brent_l1     0.095      0.037   2.550    0.012
+d_usd_l1      -0.012      0.090  -0.134    0.894</code></pre>
+</div>
+</div>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
