@@ -8,7 +8,14 @@
 \usepackage[margin=2.5cm]{geometry}
 \usepackage{amsmath,amssymb,booktabs,graphicx,caption,xcolor}
 \usepackage[hidelinks]{hyperref}
+% Figures: the repo's figures/ folder (report compiled in report/) or a
+% figures/ folder next to this file (e.g. on Overleaf)
+\graphicspath{{../figures/}{figures/}}
 \usepackage{parskip}
+\usepackage{listings}
+\lstset{language=R, basicstyle=\ttfamily\footnotesize, commentstyle=\color{gray},
+  keywordstyle=\color{blue!60!black}, columns=fullflexible, frame=single,
+  framerule=0.3pt, rulecolor=\color{gray!50}, xleftmargin=1em, framexleftmargin=1em}
 \newcommand{\todo}[1]{\textcolor{orange}{\textit{[#1]}}}
 
 \title{Forecasting Swiss CPI inflation, 2026Q4--2029Q3\\[0.3em]
@@ -173,7 +180,7 @@ Parameter uncertainty is not included.
 \section{Forecast}\label{sec:forecast}
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{figures/fan_chart_headline.png}
+  \includegraphics[width=0.85\textwidth]{fan_chart_headline}
   \caption{Headline CPI inflation forecast with 68\% and 90\% bands, and the Brent +50\% scenario}
   \label{fig:fan}
 \end{figure}
@@ -194,7 +201,7 @@ re-estimating all models at each origin (Figure~\ref{fig:spaghetti}). Tests foll
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{figures/spaghetti_headline.png}
+  \includegraphics[width=0.85\textwidth]{spaghetti_headline}
   \caption{Recursive bottom-up forecasts against the outcome}
   \label{fig:spaghetti}
 \end{figure}
@@ -265,5 +272,68 @@ and the 2024--25 decline. MAFE ratios give the same ranking.
   \item Imported block: drop the drift, add a 2009--2016 dummy, or start the sample later?
   \item Are the least-squares weights before 2016 (maximum error 0.04 pp) acceptable?
 \end{enumerate}
+
+% ==========================================================================
+\appendix
+\section{Code and reproducibility}\label{app:code}
+All results come from one R project. Running \texttt{source("main.R")} reproduces every table and
+figure in about 30 seconds. Parameters (sample start, horizon, model orders, first evaluation
+origin, number of simulations, scenario) are set once at the top of \texttt{main.R}. Raw data are
+downloaded through APIs (BFS, FRED, SNB), never edited by hand, and all paths are relative
+(\texttt{here()}).
+
+\begin{verbatim}
+Forecasting/
+|-- main.R                     parameters + runs everything in order
+|-- R/functions.R              download helpers
+|-- R/models.R                 model, forecast, aggregation and test functions
+|-- Scripts/01_load_data.R     raw data from the APIs into RAW_DATA/
+|-- Scripts/02_dta_cleaning.qmd  cleaning, block indices, weights, quarterly data
+|-- Scripts/04_model_estimation.R  estimates, diagnostics, cointegration, checks
+|-- Scripts/05_forecasting.R   point and density forecast, scenario, fan chart
+|-- Scripts/06_evaluation.R    recursive forecasts, evaluation tables, charts
+|-- DTA_CLEAN/  output/  figures/  report/
+\end{verbatim}
+
+Estimation uses transparent functions only (\texttt{stats::arima} by maximum likelihood,
+\texttt{lm}, \texttt{urca}); no automatic model selection. The forecasts are coded by hand from the
+derivations in Section~\ref{sec:models}, so each equation has a matching function
+(Table~\ref{tab:functions}).
+
+\begin{table}[h]
+  \centering\small
+  \caption{Main functions in \texttt{R/models.R}}\label{tab:functions}
+  \begin{tabular}{@{}lp{0.52\textwidth}l@{}}
+    \toprule
+    Function & What it does & Implements \\
+    \midrule
+    \texttt{fit\_arima()} & ARIMA$(p,1,q)(P,0,Q)_4$ with drift, by ML & eq.~(6) \\
+    \texttt{arima\_polys()} & Multiplies out $a(L)=\phi(L)\Phi(L^4)$ and the MA side & eq.~(7) \\
+    \texttt{arima\_paths()} & Iterates the ARIMA forward, back to log levels; zero shocks give the point forecast, drawn shocks give simulated paths & eq.~(7)--(8) \\
+    \texttt{fit\_ecm()} & Engle--Granger two steps: long-run OLS, then short-run OLS with $ect_{t-1}$ & eq.~(1)--(2) \\
+    \texttt{ecm\_paths()} & Iterates the three ECM equations forward, given driver paths & eq.~(3)--(5) \\
+    \texttt{aggregate\_headline()} & Rebuilds headline y-y inflation from block levels, linked at Q4 & Section~3.3 \\
+    \texttt{forecast\_point()} & Fits all four blocks at one origin and returns the headline forecast & -- \\
+    \texttt{wald\_hac()} & Wald test with Newey--West covariance ($h-1$ lags): MZ, unbiasedness, strong efficiency & Table~\ref{tab:absolute} \\
+    \texttt{weak\_efficiency\_p()} & Ljung--Box on the residuals of an MA$(h-1)$ fitted to the errors & Table~\ref{tab:absolute} \\
+    \texttt{dm\_test()} & Diebold--Mariano with the Harvey--Leybourne--Newbold correction & Table~\ref{tab:relative} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Check of the derivation: with zero shocks, \texttt{arima\_paths()} returns the same forecasts as R's
+Kalman-filter \texttt{predict()}, with a maximum difference of $10^{-13}$ for all three blocks. The core
+of the recursion, steps 2 and 3 of eq.~(7)--(8):
+
+\begin{lstlisting}
+for (j in 1:h) {
+  t  <- n_x + j
+  ar <- colSums(pl$a * X[t - seq_len(P), , drop = FALSE])  # sum of a_i * x_{T+h-i}
+  ma <- colSums(pl$m * E[t - seq_len(Q), , drop = FALSE])  # MA terms: eps_T only at h = 1
+  X[t, ] <- ar + E[t, ] + ma                                # future shocks E = 0 (point)
+}
+dy <- X[n_x + 1:h, , drop = FALSE] + pl$mu                  # back to q-q inflation
+y[length(y)] + matrix(apply(dy, 2, cumsum), h, N)           # cumulate to log levels
+\end{lstlisting}
 
 \end{document}
