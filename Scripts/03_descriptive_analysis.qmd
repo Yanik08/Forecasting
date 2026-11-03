@@ -151,6 +151,18 @@ seasonality %>%
   as.data.frame()
 ```
 
+The blocks split into three groups.
+
+1.  Imported excl. oil is the most seasonal block. The quarter dummies explain about two thirds of its q-o-q inflation (R² = 0.67, F = 70). Prices fall in Q1 and Q3 and rise in Q2 and Q4, which is the January and July sales. The pattern shrinks a lot between the two halves: Q3 goes from −2.64 to −1.13 and Q4 from +1.84 to +0.23. This confirms the zig-zag in the level plot and the later weakening. It also explains most of the high q-o-q volatility seen in section 2.
+
+2.  Domestic excl. rents is also clearly seasonal (R² = 0.44), but the pattern is stable. Q1 is about +0.5 % in both halves, i.e. prices are reset at the start of the year (tariffs, administered prices, services). Only Q4 changes, from about 0 to −0.33.
+
+3.  Rents and oil are not really seasonal. Rents never reject (p = 0.59 on the full sample, 0.93 after 2012). Oil only rejects on the full sample at 5 % (p = 0.01, R² = 0.10). Its Q2 is positive, which fits the spring driving season, but this is small next to its volatility (sd 6.5).
+
+Headline CPI is seasonal (R² = 0.43). This comes mostly from imported and domestic, and it weakens with the imported pattern (R² 0.62 → 0.39).
+
+For model selection: imported and domestic need a seasonal term, and rents and oil don't need one for seasonal means. For imported, fixed quarter dummies estimated from 2000 would carry the strong early-2000s pattern into the forecast. A seasonal AR term or a seasonal difference can adapt to a pattern that changes over time, so those are the two options discussed in sections 4 and 5. Since we forecast y-o-y inflation, the seasonality mostly cancels in the final numbers, but it still has to be modelled correctly in the q-o-q models.
+
 # 4. Stationarity
 
 ```{r unit-roots}
@@ -201,7 +213,7 @@ Domestic excl. rents is a borderline case in levels. The ADF rejects the unit ro
 
 Imported and domestic are only just stationary in differences (−2.97 and −2.92 vs −2.88). That fits the plots: their inflation stays away from its mean for long stretches (the strong-franc years, the 2022 surge). In the ARIMA this shows up as AR terms, and possibly the 2009–2016 dummy.
 
-Imported excl. oil: the OCSB test asks for a seasonal difference. It confirms what we saw in chunk 4: the seasonal pattern isn’t fixed but shrinks over time. So in model selection we compare two options for this block: a seasonal difference (D = 1), or a seasonal AR term on top of d = 1.
+Imported excl. oil: the OCSB test asks for a seasonal difference. It confirms what we saw in section 3: the seasonal pattern isn’t fixed but shrinks over time. So in model selection we compare two options for this block: a seasonal difference (D = 1), or a seasonal AR term on top of d = 1.
 
 Oil block: oil products, Brent and the exchange rate are all I(1). That’s exactly the condition for testing cointegration, a stable long-run link in levels, which justifies the ECM.
 
@@ -226,7 +238,7 @@ fit_grid <- function(y) {
                     error = function(e) NULL)
     if (is.null(fit)) return(NULL)
     tibble(p = p, q = q, P = P,
-           aicc = fit$aic, bic = fit$bic,
+           aicc = fit$aicc, bic = fit$bic,
            # Ljung-Box on residuals, 8 lags (2 years): H0 = no autocorrelation
            lb_p = Box.test(residuals(fit), lag = 8, type = "Ljung-Box",
                            fitdf = p + q + P)$p.value)
@@ -264,7 +276,7 @@ imap(best_fits, \(fit, name) {
 
 Rents: ARIMA(1,1,1)(1,0,0) + drift.
 
-Every coefficient is significant, and the residuals are clean (Ljung-Box p = 0.74). The drift of 0.36 % per quarter means about 1.4 % per year of long-run rent inflation, which is plausible. The seasonal AR is significant (0.27) even though chunk 4 found no seasonal means. It captures something different: this quarter’s rent inflation is related to the same quarter last year. That fits rents being adjusted once a year, for example after reference-rate changes. The top 3 are very close in BIC, so the choice isn’t critical.
+Every coefficient is significant, and the residuals are clean (Ljung-Box p = 0.74). The drift of 0.36 % per quarter means about 1.4 % per year of long-run rent inflation, which is plausible. The seasonal AR is significant (0.27) even though section 3 found no seasonal means. It captures something different: this quarter’s rent inflation is related to the same quarter last year. That fits rents being adjusted once a year, for example after reference-rate changes. The top 3 are very close in BIC, so the choice isn’t critical.
 
 Imported excl. oil: ARIMA(2,1,1)(1,0,0) + drift. Two issues:
 
@@ -272,7 +284,7 @@ The drift is negative (−0.14 % per quarter) and not significant. This is the s
 
 Domestic excl. rents: ARIMA(0,1,0)(1,0,0) + drift, the simplest possible.
 
-Inflation depends only on the same quarter last year (sar1 = 0.73), which is the strong, stable January pattern from chunk 4. The residuals pass, but only just (p = 0.11). The second model, (1,1,0)(1,0,0), has almost the same BIC (30.2 vs 30.0), a better AICc and cleaner residuals (p = 0.62). I’d pick (1,1,0)(1,0,0) and say so in the report. The drift of 0.15 % per quarter (about 0.6 % per year) is borderline significant (t = 1.8), and also pulled down by the strong-franc years.
+Inflation depends only on the same quarter last year (sar1 = 0.73), which is the strong, stable Q1 pattern from section 3. The residuals pass, but only just (p = 0.11). The second model, (1,1,0)(1,0,0), has almost the same BIC (30.2 vs 30.0), a better AICc and cleaner residuals (p = 0.62). I’d pick (1,1,0)(1,0,0) and say so in the report. The drift of 0.15 % per quarter (about 0.6 % per year) is borderline significant (t = 1.8), and also pulled down by the strong-franc years.
 
 Overall: BIC gives a reasonable first choice. The two open points, the imported drift or dummy and whether a seasonal difference is better, are best settled by an out-of-sample forecast comparison (rolling forecasts, RMSE), which fits in the forecasting/evaluation file.
 
@@ -361,3 +373,28 @@ map(0:4, \(L) {
 ecm_fit <- lm(ecm_formula(1), data = ecm_data)
 round(summary(ecm_fit)$coefficients, 3)
 ```
+
+**Long-run relation.** Cointegration depends on the trend.
+
+- With a constant only, the USD coefficient has the wrong sign (−0.09) and isn't significant. The Engle-Granger test doesn't reject (−2.85 vs −3.74), so this residual isn't stationary.
+- With a trend, everything is significant: Brent 0.43, USD 0.61, trend 0.42 % per quarter (about 1.7 % per year). Engle-Granger rejects clearly (−5.30 vs −4.10).
+
+The trend is not just a technical fix. Swiss pump prices include per-litre taxes (mineral oil tax, CO2 levy since 2008) and distribution margins that rise over time, independently of crude. The same fixed costs explain why the Brent elasticity is well below 1: crude is only part of the retail price.
+
+**Johansen.** The trace test does not reject r = 0 (37.80 \< 42.44 at 5 %, and also \< 39.06 at 10 %). So the two tests disagree. Reasons to still keep the ECM:
+
+- Johansen has low power here: 3 variables, a trend, quarter dummies and only about 105 quarters.
+- We only need one relation, with oil products as the dependent variable, which is exactly the single-equation setting of Engle-Granger.
+- The adjustment coefficient in the ECM is strongly significant (below). A significant α is itself evidence of cointegration (ECM-based test), even though its critical values are stricter than the usual t-table.
+
+This disagreement should be stated openly in the report. Note: `04_model_estimation.R` runs Johansen without quarter dummies and gets 37.98 instead of 37.80. The conclusion is the same, but the report should quote one version.
+
+**Brent vs. exchange rate.** The equality test rejects (t = 4.09 on b_usd − b_brent = 0.19). So we keep Brent and the USD rate separately rather than using Brent in CHF. The USD elasticity being larger than Brent's is hard to explain economically. It is probably partly the trend and the franc's long appreciation sharing the same slow movement, so the 0.61 shouldn't be over-interpreted.
+
+**Short-run dynamics.** BIC picks 1 lag (515 vs 527 with no lags), and the residuals are clean (Ljung-Box p = 0.73).
+
+- α = −0.39 (t = −4.3): about 40 % of a gap from the long-run equilibrium closes each quarter, so the half-life is about 1.4 quarters.
+- Pass-through is fast. Within the same quarter, Brent passes 0.31 and the USD rate 0.54, against long-run elasticities of 0.43 and 0.61. Most of the effect is there in the first quarter, and the significant lagged Brent term (0.10) adds part of the rest.
+- The lagged oil and USD terms are not significant. They are kept so that the lag structure is the same for all three variables.
+
+For forecasting, this is a conditional model: forecasts of oil products need paths for Brent and the USD rate. In the recursive evaluation, both steps (long run and ECM) have to be re-estimated in every window, which `fit_ecm()` in `R/models.R` already does.
