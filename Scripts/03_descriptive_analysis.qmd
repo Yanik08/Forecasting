@@ -324,9 +324,10 @@ tibble(long_run = c("constant", "constant + trend"),
 
 # --- 3. Johansen trace test (system approach, robustness check) ---
 # r = number of cointegrating relations; reject "r = 0" if stat > critical value.
-# K = 2 lags in levels, trend in the cointegrating relation, quarter dummies.
+# K = 2 lags in levels, trend in the cointegrating relation.
+# Same call as in 04_model_estimation.R, so both report the same statistic.
 johansen <- ca.jo(oil[, c("oil", "brent", "usd")], type = "trace",
-                  ecdet = "trend", K = 2, season = 4)
+                  ecdet = "trend", K = 2, spec = "transitory")
 cbind(stat = round(johansen@teststat, 2), johansen@cval)
 
 # --- 4. Same effect of Brent and of the exchange rate? ---
@@ -383,13 +384,13 @@ round(summary(ecm_fit)$coefficients, 3)
 
 The trend is not just a technical fix. Swiss pump prices include per-litre taxes (mineral oil tax, CO2 levy since 2008) and distribution margins that rise over time, independently of crude. The same fixed costs explain why the Brent elasticity is well below 1: crude is only part of the retail price.
 
-**Johansen.** The trace test does not reject r = 0 (37.80 \< 42.44 at 5 %, and also \< 39.06 at 10 %). So the two tests disagree. Reasons to still keep the ECM:
+**Johansen.** The trace test does not reject r = 0 (37.98 \< 42.44 at 5 %, and also \< 39.06 at 10 %). So the two tests disagree. Reasons to still keep the ECM:
 
-- Johansen has low power here: 3 variables, a trend, quarter dummies and only about 105 quarters.
+- Johansen has low power here: 3 variables, a trend and only about 105 quarters.
 - We only need one relation, with oil products as the dependent variable, which is exactly the single-equation setting of Engle-Granger.
 - The adjustment coefficient in the ECM is strongly significant (below). A significant α is itself evidence of cointegration (ECM-based test), even though its critical values are stricter than the usual t-table.
 
-This disagreement should be stated openly in the report. Note: `04_model_estimation.R` runs Johansen without quarter dummies and gets 37.98 instead of 37.80. The conclusion is the same, but the report should quote one version.
+This disagreement should be stated openly in the report. The test here is the same call as in `04_model_estimation.R`, so the statistic matches the one quoted in the report. Adding quarter dummies (`season = 4`) gives 37.80, with the same conclusion.
 
 **Brent vs. exchange rate.** The equality test rejects (t = 4.09 on b_usd − b_brent = 0.19). So we keep Brent and the USD rate separately rather than using Brent in CHF. The USD elasticity being larger than Brent's is hard to explain economically. It is probably partly the trend and the franc's long appreciation sharing the same slow movement, so the 0.61 shouldn't be over-interpreted.
 

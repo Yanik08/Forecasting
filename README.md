@@ -31,6 +31,7 @@ Forecasting/
 |-- Scripts/
 |   |-- 01_load_data.R            # downloads raw data into RAW_DATA/
 |   |-- 02_dta_cleaning.qmd       # cleaning, block indices, weights, monthly -> quarterly
+|   |-- 03_descriptive_analysis.qmd  # descriptive stats, seasonality, unit roots, model selection
 |   |-- 04_model_estimation.R     # estimates, diagnostics, cointegration, checks
 |   |-- 05_forecasting.R          # final forecast, density, oil-shock scenario, fan chart
 |   `-- 06_evaluation.R           # recursive forecasts, spaghetti chart, evaluation tables
@@ -40,8 +41,12 @@ Forecasting/
 `-- figures/                      # charts (png)
 ```
 
-`03_stationarity_tests.R` (unit-root tests, seasonality plots, X-13 adjustment) is still to
-be written.
+`03_descriptive_analysis.qmd` is a companion notebook, not part of the pipeline: `main.R`
+does not run it, because it builds no data and writes no output. It documents how the
+models were chosen (descriptive statistics, seasonality and unit-root tests, ARIMA
+selection, cointegration and ECM lag choice). Open `03_descriptive_analysis.html` to read
+it, or render the `.qmd` in RStudio to re-run it. The numbers quoted in the report come
+from `04_model_estimation.R`.
 
 ## Models
 
@@ -128,4 +133,4 @@ download: reading the snapshot in `RAW_DATA/` works without it.
 
 Data: `here`, `tidyverse`, `readxl`, `jsonlite`, `curl`, `eurostat`, `fredr`, `knitr`.
 Models and evaluation: `urca` (unit-root and cointegration tests), `sandwich`
-(Newey–West standard errors).
+(Newey–West standard errors). The descriptive notebook also needs `forecast`.

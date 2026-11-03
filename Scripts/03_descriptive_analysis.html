@@ -2687,15 +2687,16 @@ trend         0.4153891 0.02729778 15.21695 4.202882e-28</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 3. Johansen trace test (system approach, robustness check) ---</span></span>
 <span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="co"># r = number of cointegrating relations; reject &quot;r = 0&quot; if stat &gt; critical value.</span></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="co"># K = 2 lags in levels, trend in the cointegrating relation, quarter dummies.</span></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>johansen <span class="ot">&lt;-</span> <span class="fu">ca.jo</span>(oil[, <span class="fu">c</span>(<span class="st">&quot;oil&quot;</span>, <span class="st">&quot;brent&quot;</span>, <span class="st">&quot;usd&quot;</span>)], <span class="at">type =</span> <span class="st">&quot;trace&quot;</span>,</span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ecdet =</span> <span class="st">&quot;trend&quot;</span>, <span class="at">K =</span> <span class="dv">2</span>, <span class="at">season =</span> <span class="dv">4</span>)</span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">stat =</span> <span class="fu">round</span>(johansen<span class="sc">@</span>teststat, <span class="dv">2</span>), johansen<span class="sc">@</span>cval)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="co"># K = 2 lags in levels, trend in the cointegrating relation.</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Same call as in 04_model_estimation.R, so both report the same statistic.</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>johansen <span class="ot">&lt;-</span> <span class="fu">ca.jo</span>(oil[, <span class="fu">c</span>(<span class="st">&quot;oil&quot;</span>, <span class="st">&quot;brent&quot;</span>, <span class="st">&quot;usd&quot;</span>)], <span class="at">type =</span> <span class="st">&quot;trace&quot;</span>,</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ecdet =</span> <span class="st">&quot;trend&quot;</span>, <span class="at">K =</span> <span class="dv">2</span>, <span class="at">spec =</span> <span class="st">&quot;transitory&quot;</span>)</span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">stat =</span> <span class="fu">round</span>(johansen<span class="sc">@</span>teststat, <span class="dv">2</span>), johansen<span class="sc">@</span>cval)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>          stat 10pct  5pct  1pct
-r &lt;= 2 |  6.26 10.49 12.25 16.26
-r &lt;= 1 | 16.92 22.76 25.32 30.45
-r = 0  | 37.80 39.06 42.44 48.45</code></pre>
+r &lt;= 2 |  6.28 10.49 12.25 16.26
+r &lt;= 1 | 17.29 22.76 25.32 30.45
+r = 0  | 37.98 39.06 42.44 48.45</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 4. Same effect of Brent and of the exchange rate? ---</span></span>
 <span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="co"># If b_brent = b_usd, only Brent in CHF matters. Re-parametrised so that the</span></span>
@@ -2771,13 +2772,13 @@ d_usd_l1      -0.012      0.090  -0.134    0.894</code></pre>
 <li>With a trend, everything is significant: Brent 0.43, USD 0.61, trend 0.42 % per quarter (about 1.7 % per year). Engle-Granger rejects clearly (−5.30 vs −4.10).</li>
 </ul>
 <p>The trend is not just a technical fix. Swiss pump prices include per-litre taxes (mineral oil tax, CO2 levy since 2008) and distribution margins that rise over time, independently of crude. The same fixed costs explain why the Brent elasticity is well below 1: crude is only part of the retail price.</p>
-<p><strong>Johansen.</strong> The trace test does not reject r = 0 (37.80 &lt; 42.44 at 5 %, and also &lt; 39.06 at 10 %). So the two tests disagree. Reasons to still keep the ECM:</p>
+<p><strong>Johansen.</strong> The trace test does not reject r = 0 (37.98 &lt; 42.44 at 5 %, and also &lt; 39.06 at 10 %). So the two tests disagree. Reasons to still keep the ECM:</p>
 <ul>
-<li>Johansen has low power here: 3 variables, a trend, quarter dummies and only about 105 quarters.</li>
+<li>Johansen has low power here: 3 variables, a trend and only about 105 quarters.</li>
 <li>We only need one relation, with oil products as the dependent variable, which is exactly the single-equation setting of Engle-Granger.</li>
 <li>The adjustment coefficient in the ECM is strongly significant (below). A significant α is itself evidence of cointegration (ECM-based test), even though its critical values are stricter than the usual t-table.</li>
 </ul>
-<p>This disagreement should be stated openly in the report. Note: <code>04_model_estimation.R</code> runs Johansen without quarter dummies and gets 37.98 instead of 37.80. The conclusion is the same, but the report should quote one version.</p>
+<p>This disagreement should be stated openly in the report. The test here is the same call as in <code>04_model_estimation.R</code>, so the statistic matches the one quoted in the report. Adding quarter dummies (<code>season = 4</code>) gives 37.80, with the same conclusion.</p>
 <p><strong>Brent vs. exchange rate.</strong> The equality test rejects (t = 4.09 on b_usd − b_brent = 0.19). So we keep Brent and the USD rate separately rather than using Brent in CHF. The USD elasticity being larger than Brent’s is hard to explain economically. It is probably partly the trend and the franc’s long appreciation sharing the same slow movement, so the 0.61 shouldn’t be over-interpreted.</p>
 <p><strong>Short-run dynamics.</strong> BIC picks 1 lag (515 vs 527 with no lags), and the residuals are clean (Ljung-Box p = 0.73).</p>
 <ul>
