@@ -19,6 +19,19 @@ The steps are:
 5.  **Diagnostic tests** on the residuals of the chosen models.
 6.  **Forecast evaluation**: pseudo out-of-sample forecasts, with the seasonality added back, compared with an AR(1) benchmark.
 
+**DELETE BEFORE RENDERING PROJECT!!!!!!! In-sample and out-of-sample.** Two kinds of results appear in the project, depending on which data the parameters are estimated with:
+
+- **In-sample**: the parameters are estimated once on the full sample (2000Q1–2026Q3) and the model is assessed on the same data. The one-step in-sample errors are the residuals. They show how well a model fits, but are too optimistic as a measure of forecast accuracy, since the parameters have already seen the data.
+- **Out-of-sample**: at each origin t, the model is re-estimated on data up to t only (expanding window) and its forecast is compared with the realised value. This repeats what a forecaster could have done in real time.
+
+| Where | Type | What |
+|----|----|----|
+| 03, sections 3.2 and 4–7 | in-sample | seasonal adjustment, unit roots, model selection (BIC), residual diagnostics |
+| 03, section 8 | out-of-sample | each block vs AR(1), 1 and 4 quarters ahead |
+| `04_model_estimation.R` | in-sample | final estimates and tests on the full sample |
+| `05_forecasting.R` | forecast | forecast of 2026Q4–2029Q3 with the parameters estimated on the full sample |
+| `06_evaluation.R` | out-of-sample | headline inflation vs benchmarks, 1 to 12 quarters ahead |
+
 ```{r setup}
 library(here)
 library(tidyverse)
@@ -26,6 +39,7 @@ library(seasonal)   # seas(): X-13ARIMA-SEATS seasonal adjustment
 library(urca)       # ur.df() (ADF), ur.kpss() (KPSS), ca.jo() (Johansen)
 library(forecast)   # Arima(), forecast(), dm.test()
 library(tseries)    # jarque.bera.test()
+library(lmtest)     # grangertest()
 
 clean_dir <- here("DTA_CLEAN")
 
@@ -301,6 +315,8 @@ Since oil products, Brent and the exchange rate are all I(1), we can test whethe
 
 # 5. Model selection: ARIMA blocks
 
+*In-sample: all models in sections 5 to 7 are estimated on the full sample, 2000Q1–2026Q3.*
+
 ```{r arima-selection}
 # The three ARIMA blocks: adjusted log levels, as quarterly time series
 arima_vars <- c(rent = "sa_rent", imp_xoil = "sa_imp_xoil", dom_xrent = "sa_dom_xrent")
@@ -403,7 +419,29 @@ johansen <- ca.jo(oil[, c("oil", "brent", "usd")], type = "trace",
                   ecdet = "trend", K = 2, spec = "transitory")
 cbind(stat = round(johansen@teststat, 2), johansen@cval)
 
-# --- 4. Same effect of Brent and of the exchange rate? ---
+# --- 4. Are Brent and USD exogenous? ---
+# The single-equation ECM treats Brent and USD as given. Two checks:
+# (a) Weak exogeneity: in the Johansen VECM, Brent and USD do not adjust to
+#     the long-run gap (alpha_brent = alpha_usd = 0). LR test of this
+#     restriction; H0 = only oil products adjust.
+weak_exo <- alrtest(johansen, A = matrix(c(1, 0, 0), nrow = 3), r = 1)
+c(lr_stat = round(weak_exo@teststat, 2), p_value = round(weak_exo@pval[1], 3))
+
+# Adjustment coefficients (alpha) of each variable in the VECM
+round(cajorls(johansen, r = 1)$rlm$coefficients["ect1", ], 3)
+
+# (b) No feedback: past changes in oil product prices do not help predict
+#     Brent or USD (Granger causality, 4 lags = one year).
+#     H0 = oil products do not Granger-cause the driver.
+oil_diff <- oil %>%
+  transmute(d_oil = oil - lag(oil), d_brent = brent - lag(brent), d_usd = usd - lag(usd)) %>%
+  drop_na()
+tibble(driver  = c("Brent", "USD"),
+       p_value = c(grangertest(d_brent ~ d_oil, order = 4, data = oil_diff)$`Pr(>F)`[2],
+                   grangertest(d_usd   ~ d_oil, order = 4, data = oil_diff)$`Pr(>F)`[2])) %>%
+  mutate(p_value = round(p_value, 3))
+
+# --- 5. Same effect of Brent and of the exchange rate? ---
 # If b_brent = b_usd, only Brent in CHF matters. Re-parametrised so that the
 # coefficient on usd is b_usd - b_brent: H0 = this coefficient is 0.
 summary(lm(oil ~ I(brent + usd) + usd + trend, data = oil))$coefficients["usd", ]
@@ -418,10 +456,17 @@ We interpret the trend economically: Swiss fuel prices include per-litre taxes (
 
 **Johansen test.** The trace test rejects r = 0 at 5 % (44.14 \> 42.44) and does not reject r ≤ 1 (17.03 \< 25.32). Both tests therefore find exactly one cointegrating relation.
 
+**Exogeneity of Brent and USD.** The single-equation ECM assumes that the drivers do not depend on Swiss oil product prices. Both checks support this:
+
+- Weak exogeneity: in the Johansen VECM, the restriction that only oil products adjust to the long-run gap is not rejected (LR = 0.30, p = 0.86). The adjustment coefficients are −0.45 for oil products, against −0.08 for Brent and 0.07 for USD.
+- No feedback: past oil product inflation does not Granger-cause Brent (p = 0.33) or USD (p = 0.26).
+
+We therefore treat Brent and USD as exogenous and estimate a single equation for oil products. The VECM adjustment coefficient of oil products (−0.45) is also very close to the one of the ECM below.
+
 **Brent vs. exchange rate.** Equal elasticities are rejected (t = 3.88 on b_usd − b_brent = 0.18), so we keep Brent and the USD rate as separate variables rather than using Brent in CHF.
 
 ```{r oil-ecm}
-# --- 5. ECM lag selection ---
+# --- 6. ECM lag selection ---
 # d_oil_t = c + alpha * ect_(t-1) + b * d_brent_t + g * d_usd_t
 #           + L lags of d_oil, d_brent and d_usd
 # ect = residual of the long-run relation with trend (deviation from equilibrium)
@@ -493,6 +538,8 @@ imap(model_resid, \(e, b) {
 No model shows changing variance (all ARCH p \> 0.26). The oil ECM residuals are normal (p = 0.35). The residuals of the three ARIMA models are not, because of the level shifts found by X-13 (2000Q4 for rents, 2011Q4 for imported goods, 2023Q1 for domestic goods), which remain in the adjusted series. This does not bias the point forecasts, but the prediction intervals of these blocks are less reliable.
 
 # 8. Forecast evaluation
+
+*Out-of-sample: at each origin, every step (seasonal adjustment, estimation, forecast) uses only the data available at that time.*
 
 ```{r evaluation}
 # Pseudo out-of-sample, expanding window. At each origin t (2012Q4, 2013Q1, ...)
