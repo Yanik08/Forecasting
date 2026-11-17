@@ -21,14 +21,22 @@ start_estimation <- as.Date("2000-01-01")  # first quarter used by the models
 first_origin     <- as.Date("2012-10-01")  # first origin of the evaluation (2012Q4)
 fcst_horizon     <- 12                     # quarters: 2026Q4-2029Q3
 
-# Model orders: ARIMA(p,1,q)(P,0,Q)_4 with drift, on 100 * log(index).
-# As estimated with the TA (see the model doc, section 2). `headline` is the
-# benchmark: an ARIMA directly on headline CPI, without disaggregation.
+# Model orders: ARIMA(p,1,q) with drift, on 100 * log(index) seasonally
+# adjusted with X-13 (no seasonal term). Selected by BIC in
+# 03_descriptive_analysis.qmd, section 5. Imported goods excl. oil also
+# include a dummy for the strong-franc period 2009Q1-2016Q4, which shifts
+# their mean growth during that period only (zero in the forecast).
+# Benchmarks for the evaluation (06), applied directly to headline CPI
+# seasonally adjusted with X-13, without disaggregation:
+#   headline:     ARIMA with the lowest BIC on adjusted headline CPI, 2000Q1-2026Q3
+#   headline_ar1: AR(1) on quarterly headline inflation, the standard benchmark
 arima_specs <- list(
-  rent      = list(order = c(1, 1, 1), seasonal = c(1, 0, 0)),
-  imp_xoil  = list(order = c(2, 1, 1), seasonal = c(1, 0, 0)),
-  dom_xrent = list(order = c(0, 1, 0), seasonal = c(1, 0, 0)),
-  headline  = list(order = c(1, 1, 0), seasonal = c(1, 0, 0))
+  rent      = list(order = c(3, 1, 0)),
+  imp_xoil  = list(order = c(0, 1, 2),
+                   dummy = c(from = "2009-01-01", to = "2016-10-01")),  # strong franc
+  dom_xrent = list(order = c(1, 1, 1)),
+  headline     = list(order = c(0, 1, 1)),
+  headline_ar1 = list(order = c(1, 1, 0))
 )
 
 # Density forecast and scenario
@@ -47,6 +55,10 @@ if (run_cleaning) {
                      output = tempfile(fileext = ".R"), quiet = TRUE))
 }
 
-source(here("Scripts", "04_model_estimation.R"))  # estimates, tests, checks
-source(here("Scripts", "05_forecasting.R"))       # final forecast, fan chart
-source(here("Scripts", "06_evaluation.R"))        # spaghetti chart, tables
+# Estimation is a Quarto notebook too: extract its R code and run it
+source(knitr::purl(here("Scripts", "04_model_estimation.qmd"),   # estimates, tests, checks
+                   output = tempfile(fileext = ".R"), quiet = TRUE))
+source(knitr::purl(here("Scripts", "05_forecasting.qmd"),        # final forecast, fan chart
+                   output = tempfile(fileext = ".R"), quiet = TRUE))
+source(knitr::purl(here("Scripts", "06_evaluation.qmd"),         # spaghetti chart, tables
+                   output = tempfile(fileext = ".R"), quiet = TRUE))
