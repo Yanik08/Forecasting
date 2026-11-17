@@ -1,0 +1,224 @@
+---
+   title: "Forecasting"
+   format:
+     html:
+       embed-resources: true
+   editor: visual
+---
+
+# Forecasting
+
+This file follows `04_model_estimation.qmd`. We forecast headline year-on-year inflation for the 12 quarters 2026Q4–2029Q3, from the last observed quarter (2026Q3). The models are those estimated in 04, on the full sample 2000Q1–2026Q3.
+
+The steps are:
+
+1.  **Point forecast**: forecast of each block, aggregated to headline inflation with the CPI weights.
+2.  **Density forecast**: simulated paths, giving the uncertainty around the point forecast.
+3.  **Oil price scenario**: headline inflation if Brent rises permanently.
+4.  **Fan chart**: point forecast, bands and scenario in one figure.
+
+All functions used here (`forecast_point()`, `arima_paths()`, `ecm_paths()`, `aggregate_headline()`, ...) are in `R/models.R`.
+
+```{r}
+library(here)
+library(tidyverse)
+source(here("R", "models.R"))
+
+# Parameters. When the project is run with main.R, its values are used;
+# otherwise the same values are set here so the file can be rendered alone.
+if (!inherits(get0("start_estimation"), "Date")) start_estimation <- as.Date("2000-01-01")
+if (!exists("fcst_horizon"))     fcst_horizon     <- 12
+if (!all(c("rent", "imp_xoil", "dom_xrent") %in% names(get0("arima_specs")))) {
+  arima_specs <- list(rent      = list(order = c(3, 1, 0)),
+                      imp_xoil  = list(order = c(0, 1, 2),
+                                       dummy = c(from = "2009-01-01", to = "2016-10-01")),
+                      dom_xrent = list(order = c(1, 1, 1)),
+                      headline  = list(order = c(0, 1, 1)))
+}
+if (!exists("n_sims"))         n_sims         <- 5000                   # simulated paths
+if (!exists("seed"))           seed           <- 2026                   # reproducible draws
+if (!inherits(get0("oil_shock_date"), "Date")) oil_shock_date <- as.Date("2027-01-01")  # scenario start
+if (!exists("oil_shock_size")) oil_shock_size <- 50                     # Brent rise, in %
+
+dir.create(here("output"),  showWarnings = FALSE)
+dir.create(here("figures"), showWarnings = FALSE)
+set.seed(seed)
+
+# Quarterly data from 2000Q1, with logs x 100 and the block weights
+q <- load_quarterly(start_estimation)
+H <- fcst_horizon
+n <- nrow(q)
+
+# CPI weights of the last observed year (2026), in % of the basket. They are
+# held fixed over the horizon (random walk on the weights, doc eq. 25).
+w <- latest_weights(q)
+max(q$date)
+round(w, 2)
+```
+
+The forecast starts after 2026Q3. Domestic goods excl. rents make up 59 % of the basket, imported goods excl. oil 20 %, rents 19 % and oil products 2 %.
+
+# 1. Point forecast
+
+```{r}
+# forecast_point() does, for each block:
+#   1. X-13 seasonal adjustment (and forecast of the seasonal component),
+#   2. estimation of the model on the adjusted series (ECM for oil, ARIMA
+#      otherwise), with Brent and USD/CHF held at their last value,
+#   3. the optimal h-step forecast, plus the seasonal component,
+# then aggregates the four blocks to headline y-y inflation with the weights.
+point    <- forecast_point(q, H, arima_specs)
+fc_dates <- point$dates
+
+# y-y inflation of each block: forecast log level minus the level four
+# quarters earlier (observed for h <= 4, forecast afterwards)
+block_yy <- map_dfc(setNames(nm = block_names), function(b) {
+  y_all <- c(q[[paste0("y_", b)]], drop(point$blocks[[b]]))
+  y_all[n + 1:H] - y_all[n + 1:H - 4]
+})
+forecast_blocks <- bind_cols(date = fc_dates, block_yy, headline = point$headline)
+
+forecast_blocks %>%
+  mutate(across(-date, ~ round(.x, 2))) %>%
+  as.data.frame()
+
+write_csv(forecast_blocks, here("output", "forecast_blocks.csv"))
+```
+
+Headline inflation is forecast at 0.88 % in 2026Q4 and 0.82 % in 2027Q1, then falls to about 0.5 % in mid-2027 and settles around 0.65–0.7 % from 2028 on. All values stay within the SNB price-stability range of 0–2 %.
+
+The blocks explain this path:
+
+- **Oil products** rise strongly at first (+17.8 % y-o-y in 2026Q4), because recent increases in Brent and the USD rate are still passing through. With Brent and the USD held constant, this effect disappears after one year, which explains the fall of headline inflation in 2027. Oil inflation then settles at about 1.6 % per year, the trend of the long-run relation.
+- **Rents** grow by about 1.5 % per year, in line with their drift.
+- **Imported goods excl. oil** stay close to 0 % (between −0.2 % and +0.2 % per year). The strong-franc dummy keeps the price decline of 2009–2016 out of the forecast, so the block grows at its drift outside that period, which is close to zero.
+- **Domestic goods excl. rents** rise from 0.3 % to about 0.6 % per year.
+
+With a weight of 59 %, domestic goods drive most of the long-run level of headline inflation.
+
+# 2. Density forecast
+
+```{r}
+# Bootstrap: for each simulated path and each future quarter we draw ONE past
+# quarter at random and take, from that same quarter, the residuals of all
+# four block models and the changes in Brent and USD/CHF. Drawing the same
+# quarter for everything keeps the correlation between blocks and drivers
+# (e.g. an oil shock hits Brent and the oil block at the same time).
+# Parameter uncertainty is not included, and the X-13 seasonal component is
+# added to every path as it is (no uncertainty on the seasonal pattern).
+N <- n_sims
+
+# Same X-13 adjustment and models as the point forecast
+adj        <- point$fits$adj
+ecm        <- point$fits$ecm
+arima_fits <- point$fits$arima
+
+# Residuals and driver changes, as full-length vectors indexed by quarter
+res <- list(oil = c(NA, NA, unname(resid(ecm$sr))))      # the ECM loses 2 quarters
+for (b in names(arima_fits)) res[[b]] <- as.numeric(residuals(arima_fits[[b]]))
+d_brent <- c(NA, diff(q$y_brent))
+d_usd   <- c(NA, diff(q$y_usd))
+
+# One random past quarter per future quarter and path (quarters 3..n have
+# every residual); pick() takes the values of that quarter
+draw <- matrix(sample(3:n, H * N, replace = TRUE), H, N)
+pick <- function(x) matrix(x[draw], H, N)
+
+# Simulated driver paths: last value plus the drawn changes
+brent_sim <- q$y_brent[n] + apply(pick(d_brent), 2, cumsum)
+usd_sim   <- q$y_usd[n]   + apply(pick(d_usd),   2, cumsum)
+
+# Simulated block paths (adjusted), plus the X-13 seasonal component
+sim_y <- list(oil = ecm_paths(ecm, H, brent_sim, usd_sim, shocks = pick(res$oil)) +
+                adj$oil$sf_fc)
+for (b in names(arima_fits)) {
+  sim_y[[b]] <- arima_paths(arima_fits[[b]], adj[[b]]$sa, H,
+                            shocks = pick(res[[b]])) + adj[[b]]$sf_fc
+}
+sim_y <- sim_y[block_names]
+
+# Aggregate every path to headline y-y inflation: an H x N matrix
+sim_pi <- aggregate_headline(q, fc_dates, sim_y, w)
+
+# Quantiles by horizon: 90% band (5-95), 68% band (16-84), median
+probs <- c(0.05, 0.16, 0.50, 0.84, 0.95)
+quantiles <- t(apply(sim_pi, 1, quantile, probs = probs))
+colnames(quantiles) <- paste0("q", probs * 100)
+
+# Share of paths inside the SNB price-stability range (0-2 %)
+in_range <- rowMeans(sim_pi >= 0 & sim_pi <= 2)
+
+tibble(date = fc_dates, point = point$headline) %>%
+  bind_cols(as_tibble(quantiles)) %>%
+  mutate(prob_0_2 = in_range) %>%
+  mutate(across(-date, ~ round(.x, 2))) %>%
+  as.data.frame()
+```
+
+The uncertainty grows with the horizon and stabilises after about a year. One quarter ahead, the 90 % band is 0.5–1.3 %; from 2028 on it is about −0.4 % to 1.8 %, and the 68 % band about 0.0 % to 1.4 %. The median is slightly above the point forecast, so the distribution is somewhat skewed upwards. The probability that inflation stays within the SNB range of 0–2 % (last column) is close to 100 % in the first two quarters and about 80–85 % from mid-2027 on; almost all of the remaining probability lies below 0 %, not above 2 %.
+
+These bands treat the estimated parameters and the seasonal pattern as known, so they understate the true uncertainty. The out-of-sample errors in 06 give a complementary measure.
+
+# 3. Oil price scenario
+
+```{r}
+# Brent rises permanently by oil_shock_size % from oil_shock_date; USD/CHF
+# and the other blocks as in the baseline. Point forecast only.
+brent_shock <- random_walk(q$y_brent, H) +
+  ifelse(fc_dates >= oil_shock_date, log100(1 + oil_shock_size / 100), 0)
+
+shock_y     <- point$blocks
+shock_y$oil <- ecm_paths(ecm, H, brent_shock, random_walk(q$y_usd, H)) + adj$oil$sf_fc
+shock_pi    <- drop(aggregate_headline(q, fc_dates, shock_y, w))
+
+# Summary table: point forecast, quantiles and scenario
+forecast_headline <- tibble(date = fc_dates, point = point$headline) %>%
+  bind_cols(as_tibble(quantiles)) %>%
+  mutate(oil_shock = shock_pi, shock_effect_pp = oil_shock - point)
+
+forecast_headline %>%
+  select(date, point, oil_shock, shock_effect_pp) %>%
+  mutate(across(-date, ~ round(.x, 2))) %>%
+  as.data.frame()
+
+write_csv(forecast_headline, here("output", "forecast_headline.csv"))
+```
+
+A permanent 50 % rise in Brent from 2027Q1 raises headline inflation by up to 0.4 percentage points during 2027. The effect is temporary: the price level of oil products stays higher, but after four quarters the y-o-y comparison is made with an already higher level, so inflation returns to the baseline in 2028. With a weight of only 2 %, oil products have a limited effect on headline inflation, even for a large shock.
+
+# 4. Fan chart
+
+```{r}
+# Observed headline inflation since 2018, and the forecast; the bands start
+# at the last observation so the chart has no gap
+history <- q %>% filter(date >= as.Date("2018-01-01")) %>% select(date, pi_cpi)
+last    <- tail(history, 1)
+fan <- forecast_headline %>%
+  bind_rows(tibble(date = last$date, point = last$pi_cpi, q5 = last$pi_cpi,
+                   q16 = last$pi_cpi, q50 = last$pi_cpi, q84 = last$pi_cpi,
+                   q95 = last$pi_cpi, oil_shock = last$pi_cpi)) %>%
+  arrange(date)
+
+fan_chart <- ggplot(fan, aes(date)) +
+  annotate("rect", xmin = min(history$date), xmax = max(fan$date),
+           ymin = 0, ymax = 2, fill = "grey92") +                       # SNB range
+  geom_ribbon(aes(ymin = q5, ymax = q95), fill = "#2b6cb0", alpha = 0.18) +   # 90%
+  geom_ribbon(aes(ymin = q16, ymax = q84), fill = "#2b6cb0", alpha = 0.30) +  # 68%
+  geom_line(aes(y = point), colour = "#2b6cb0", linewidth = 1) +
+  geom_line(aes(y = oil_shock), colour = "#c05621", linewidth = 0.8,
+            linetype = "dashed") +
+  geom_line(data = history, aes(date, pi_cpi), colour = "black", linewidth = 0.9) +
+  labs(title = "Swiss CPI inflation forecast, 2026Q4-2029Q3",
+       subtitle = paste0("Blue: point forecast with 68% and 90% bands. Orange dashed: Brent +",
+                         oil_shock_size, "% from ", format(oil_shock_date, "%Y"), "Q",
+                         lubridate::quarter(oil_shock_date), ". Grey area: SNB range 0-2%."),
+       x = NULL, y = "Year-on-year inflation, %",
+       caption = "Source: BFS, FRED, SNB; own calculations.") +
+  theme_minimal(base_size = 11)
+
+fan_chart
+ggsave(here("figures", "fan_chart_headline.png"), fan_chart,
+       width = 9, height = 5, dpi = 300, bg = "white")
+```
+
+The fan chart summarises the forecast: after the 2021–2023 surge and the return close to zero in 2025, headline inflation is expected to stay low, around 0.5–0.7 %, within the SNB range. The bands show that a return to slightly negative inflation is possible, while inflation above 2 % is unlikely over the horizon.

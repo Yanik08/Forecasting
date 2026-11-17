@@ -28,9 +28,9 @@ The steps are:
 |----|----|----|
 | 03, sections 3.2 and 4–7 | in-sample | seasonal adjustment, unit roots, model selection (BIC), residual diagnostics |
 | 03, section 8 | out-of-sample | each block vs AR(1), 1 and 4 quarters ahead |
-| `04_model_estimation.R` | in-sample | final estimates and tests on the full sample |
-| `05_forecasting.R` | forecast | forecast of 2026Q4–2029Q3 with the parameters estimated on the full sample |
-| `06_evaluation.R` | out-of-sample | headline inflation vs benchmarks, 1 to 12 quarters ahead |
+| `04_model_estimation.qmd` | in-sample | final estimates and tests on the full sample |
+| `05_forecasting.qmd` | forecast | forecast of 2026Q4–2029Q3 with the parameters estimated on the full sample |
+| `06_evaluation.qmd` | out-of-sample | headline inflation vs benchmarks, 1 to 12 quarters ahead |
 
 ```{r setup}
 library(here)
@@ -138,7 +138,7 @@ inflation %>%
 
 The blocks behave very differently, which supports modelling them separately. Oil products are the most volatile, with a standard deviation 23 times that of rents. Rents are stable and almost always rising (only 8 % of quarters are negative). Imported excl. oil falls more often than it rises.
 
-Imported excl. oil has a negative average (−0.12 % per quarter). The second table shows that this comes from the strong-franc period 2009–2016 (−1.8 % y/y); in the other periods the average is close to zero or positive. An ARIMA with drift estimated from 2000 would carry this negative average into the forecast. We address this in model selection, either with a 2009–2016 dummy or without drift.
+Imported excl. oil has a negative average (−0.12 % per quarter). The second table shows that this comes from the strong-franc period 2009–2016 (−1.8 % y/y); in the other periods the average is close to zero or positive. An ARIMA with drift estimated from 2000 would carry this negative average into the forecast, i.e. extrapolate the strong-franc deflation to the whole horizon. We therefore include a dummy for 2009–2016 in the model of imported goods (section 5), so that the drift measures growth outside this period.
 
 Imported excl. oil is also volatile for a non-energy block (sd 1.89), while its y/y inflation is much smoother. Most of the q-o-q volatility is therefore the seasonal pattern from sales, which we test in section 3.
 
@@ -322,13 +322,27 @@ Since oil products, Brent and the exchange rate are all I(1), we can test whethe
 arima_vars <- c(rent = "sa_rent", imp_xoil = "sa_imp_xoil", dom_xrent = "sa_dom_xrent")
 to_ts <- function(x) ts(x, start = c(2000, 1), frequency = 4)
 
-# Candidates: ARIMA(p,1,q) with drift, p = 0..3, q = 0..2 (12 models).
+# Strong-franc dummy for imported goods excl. oil: D_t = 1 in 2009Q1-2016Q4.
+# It enters in levels as the cumulated dummy, so that after differencing it
+# shifts quarterly growth by delta during that period only:
+#   diff(y)_t = mu + delta * D_t + ARMA.
+# In forecasts D = 0, i.e. the cumulated dummy stays at its last value, and
+# the block grows at the drift mu estimated outside the strong-franc period.
+strong_franc <- function(dates) {
+  cbind(strong_franc = cumsum(dates >= as.Date("2009-01-01") & dates <= as.Date("2016-10-01")))
+}
+block_xreg <- list(rent      = NULL,
+                   imp_xoil  = strong_franc(sample_2000$date),
+                   dom_xrent = NULL)
+
+# Candidates: ARIMA(p,1,q) with drift, p = 0..3, q = 0..2 (12 models),
+# plus the strong-franc dummy for imported goods.
 # No seasonal term: the series are seasonally adjusted.
 grid <- expand_grid(p = 0:3, q = 0:2)
 
-fit_grid <- function(y) {
+fit_grid <- function(y, xreg = NULL) {
   pmap(grid, \(p, q) {
-    fit <- tryCatch(Arima(y, order = c(p, 1, q), include.drift = TRUE),
+    fit <- tryCatch(Arima(y, order = c(p, 1, q), include.drift = TRUE, xreg = xreg),
                     error = function(e) NULL)
     if (is.null(fit)) return(NULL)
     tibble(p = p, q = q, aicc = fit$aicc, bic = fit$bic,
@@ -338,7 +352,7 @@ fit_grid <- function(y) {
   }) %>% list_rbind()
 }
 
-arima_grid <- imap(arima_vars, \(v, b) fit_grid(to_ts(sample_2000[[v]])) %>%
+arima_grid <- imap(arima_vars, \(v, b) fit_grid(to_ts(sample_2000[[v]]), block_xreg[[b]]) %>%
                      mutate(block = blocks[[b]], .before = 1)) %>%
   list_rbind()
 
@@ -360,7 +374,8 @@ arima_orders <- map(names(arima_vars), \(b) {
 
 # Re-estimate the chosen models and show their coefficients
 best_fits <- imap(arima_orders, \(ord, b)
-  Arima(to_ts(sample_2000[[arima_vars[[b]]]]), order = ord, include.drift = TRUE))
+  Arima(to_ts(sample_2000[[arima_vars[[b]]]]), order = ord, include.drift = TRUE,
+        xreg = block_xreg[[b]]))
 
 imap(best_fits, \(fit, b) {
   tibble(block = blocks[[b]], term = names(coef(fit)),
@@ -376,7 +391,7 @@ We select the model with the lowest BIC, which penalises additional parameters m
 
 **Rents: ARIMA(3,1,0) with drift.** All coefficients are significant and the residuals show no autocorrelation (Ljung-Box p = 0.83). The three AR terms describe the slow, cyclical adjustment of rents, in line with yearly adjustments after reference-rate changes. The drift of 0.36 % per quarter (t = 5.4) implies long-run rent inflation of about 1.4 % per year.
 
-**Imported excl. oil: ARIMA(2,1,0) with drift.** The second AR term is significant (0.40, t = 4.5) and the residuals are clean (p = 0.42). The drift is negative (−0.14 % per quarter) and not significant. It reflects the strong-franc period and would imply steadily falling import prices at long horizons; a model without drift or with a 2009–2016 dummy is the alternative.
+**Imported excl. oil: ARIMA(0,1,2) with drift and a dummy for 2009Q1–2016Q4.** The strong-franc period is a temporary regime: after the franc's appreciation in 2011 and the removal of the EUR/CHF floor in 2015, import prices fell for several years. The dummy shifts the mean growth of imported goods during these years only. It is significant: growth was 0.53 pp lower per quarter (t = −3.3). Outside this period the drift is close to zero (0.03 % per quarter, not significant), and this is the growth used in the forecast, where the dummy is zero. Including the dummy also improves the fit (BIC 188.5, against 191.5 for the best model without dummy). The second MA term is significant (0.40, t = 4.1), and the residuals show no autocorrelation (Ljung-Box p = 0.20).
 
 **Domestic excl. rents: ARIMA(1,1,1) with drift.** Both coefficients are significant (ar1 = 0.83, ma1 = −0.45) and the residuals pass the Ljung-Box test (p = 0.19). The drift of 0.15 % per quarter (about 0.6 % per year) is significant (t = 2.6).
 
@@ -551,9 +566,9 @@ No model shows changing variance (all ARCH p \> 0.26). The oil ECM residuals are
 # quarters ahead. At h = 4 the error is the error on y-o-y inflation.
 # Benchmark: AR(1) on raw q-o-q inflation, i.e. ARIMA(1,1,0) with drift on
 # the raw log level.
-first_origin <- which(sample_2000$date == as.Date("2012-10-01"))
+first_index <- which(sample_2000$date == as.Date("2012-10-01"))   # position of 2012Q4
 n_obs   <- nrow(sample_2000)
-origins <- first_origin:(n_obs - 1)
+origins <- first_index:(n_obs - 1)
 h_max   <- 4
 
 # ECM forecast of the adjusted oil level from origin t, with Brent and USD
@@ -587,8 +602,13 @@ oos_errors <- map(origins, \(t) {
       ecm_forecast(tibble(oil = adj$sa, brent = hist$l_brent_usd,
                           usd = hist$l_chf_per_usd, trend = 1:t), n_h)
     } else {
-      as.numeric(forecast(Arima(to_ts(adj$sa), order = arima_orders[[b]],
-                                include.drift = TRUE), h = n_h)$mean)
+      # strong-franc dummy for imported goods, built on the data up to t;
+      # in the forecast the cumulated dummy stays at its last value (D = 0)
+      xr     <- if (b == "imp_xoil") strong_franc(hist$date) else NULL
+      xr_new <- if (is.null(xr)) NULL else matrix(xr[t], n_h, 1,
+                                                  dimnames = list(NULL, "strong_franc"))
+      fit <- Arima(to_ts(adj$sa), order = arima_orders[[b]], include.drift = TRUE, xreg = xr)
+      as.numeric(forecast(fit, h = n_h, xreg = xr_new)$mean)
     }
     f_ar1 <- forecast(Arima(to_ts(raw[1:t]), order = c(1, 1, 0), include.drift = TRUE),
                       h = n_h)$mean
@@ -615,7 +635,7 @@ oos_errors %>%
 
 We evaluate the models by pseudo out-of-sample forecasting from 2012Q4 (55 forecasts one quarter ahead, 52 four quarters ahead). At each origin the seasonal adjustment, the estimation and the forecast use only the data available at that time, and the X-13 seasonal forecast is added back before comparing with the raw series.
 
-- **Imported and domestic goods** outperform the AR(1) one quarter ahead: errors are 40 % and 28 % smaller, and the difference is significant (DM p = 0.001 and 0.020). The gain comes from the seasonal adjustment, which the AR(1) does not have. Four quarters ahead our models remain better (ratios 0.90 and 0.93), but not significantly, as the seasonal pattern largely cancels over a full year.
+- **Imported and domestic goods** outperform the AR(1) one quarter ahead: errors are 38 % and 28 % smaller, and the difference is significant (DM p = 0.001 and 0.020). The gain comes from the seasonal adjustment, which the AR(1) does not have. Four quarters ahead our models remain better (ratios 0.89 and 0.93), but not significantly, as the seasonal pattern largely cancels over a full year.
 - **Oil products (ECM)** are forecast better than with the AR(1) at both horizons (ratio 0.91 and 0.92), but not significantly. Oil prices are difficult to forecast, and we assume constant Brent and USD after each origin.
 - **Rents** show no gain over the AR(1): both models perform equally, consistent with the absence of seasonality in rents.
 

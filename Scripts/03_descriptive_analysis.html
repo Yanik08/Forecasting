@@ -2239,16 +2239,16 @@ vertical-align: -.125em;
 <li><strong>Diagnostic tests</strong> on the residuals of the chosen models.</li>
 <li><strong>Forecast evaluation</strong>: pseudo out-of-sample forecasts, with the seasonality added back, compared with an AR(1) benchmark.</li>
 </ol>
-<p><strong>In-sample and out-of-sample.</strong> Two kinds of results appear in the project, depending on which data the parameters are estimated with:</p>
+<p><strong>DELETE BEFORE RENDERING PROJECT!!!!!!! In-sample and out-of-sample.</strong> Two kinds of results appear in the project, depending on which data the parameters are estimated with:</p>
 <ul>
 <li><strong>In-sample</strong>: the parameters are estimated once on the full sample (2000Q1–2026Q3) and the model is assessed on the same data. The one-step in-sample errors are the residuals. They show how well a model fits, but are too optimistic as a measure of forecast accuracy, since the parameters have already seen the data.</li>
 <li><strong>Out-of-sample</strong>: at each origin t, the model is re-estimated on data up to t only (expanding window) and its forecast is compared with the realised value. This repeats what a forecaster could have done in real time.</li>
 </ul>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 31%">
-<col style="width: 17%">
-<col style="width: 50%">
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -2269,17 +2269,17 @@ vertical-align: -.125em;
 <td>each block vs AR(1), 1 and 4 quarters ahead</td>
 </tr>
 <tr class="odd">
-<td><code>04_model_estimation.R</code></td>
+<td><code>04_model_estimation.qmd</code></td>
 <td>in-sample</td>
 <td>final estimates and tests on the full sample</td>
 </tr>
 <tr class="even">
-<td><code>05_forecasting.R</code></td>
+<td><code>05_forecasting.qmd</code></td>
 <td>forecast</td>
 <td>forecast of 2026Q4–2029Q3 with the parameters estimated on the full sample</td>
 </tr>
 <tr class="odd">
-<td><code>06_evaluation.R</code></td>
+<td><code>06_evaluation.qmd</code></td>
 <td>out-of-sample</td>
 <td>headline inflation vs benchmarks, 1 to 12 quarters ahead</td>
 </tr>
@@ -2472,7 +2472,7 @@ The following objects are masked from &#39;package:base&#39;:
 </div>
 </div>
 <p>The blocks behave very differently, which supports modelling them separately. Oil products are the most volatile, with a standard deviation 23 times that of rents. Rents are stable and almost always rising (only 8 % of quarters are negative). Imported excl. oil falls more often than it rises.</p>
-<p>Imported excl. oil has a negative average (−0.12 % per quarter). The second table shows that this comes from the strong-franc period 2009–2016 (−1.8 % y/y); in the other periods the average is close to zero or positive. An ARIMA with drift estimated from 2000 would carry this negative average into the forecast. We address this in model selection, either with a 2009–2016 dummy or without drift.</p>
+<p>Imported excl. oil has a negative average (−0.12 % per quarter). The second table shows that this comes from the strong-franc period 2009–2016 (−1.8 % y/y); in the other periods the average is close to zero or positive. An ARIMA with drift estimated from 2000 would carry this negative average into the forecast, i.e. extrapolate the strong-franc deflation to the whole horizon. We therefore include a dummy for 2009–2016 in the model of imported goods (section 5), so that the drift measures growth outside this period.</p>
 <p>Imported excl. oil is also volatile for a non-energy block (sd 1.89), while its y/y inflation is much smoother. Most of the q-o-q volatility is therefore the seasonal pattern from sales, which we test in section 3.</p>
 <p>Inflation in the early 1990s is four to five times higher than later in every block. We therefore start the estimation sample in 2000 rather than in 1988.</p>
 </section>
@@ -2713,40 +2713,54 @@ The following objects are masked from &#39;package:base&#39;:
 <span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>arima_vars <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">rent =</span> <span class="st">&quot;sa_rent&quot;</span>, <span class="at">imp_xoil =</span> <span class="st">&quot;sa_imp_xoil&quot;</span>, <span class="at">dom_xrent =</span> <span class="st">&quot;sa_dom_xrent&quot;</span>)</span>
 <span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>to_ts <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">ts</span>(x, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">2000</span>, <span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">4</span>)</span>
 <span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Candidates: ARIMA(p,1,q) with drift, p = 0..3, q = 0..2 (12 models).</span></span>
-<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a><span class="co"># No seasonal term: the series are seasonally adjusted.</span></span>
-<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(<span class="at">p =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">3</span>, <span class="at">q =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">2</span>)</span>
-<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>fit_grid <span class="ot">&lt;-</span> <span class="cf">function</span>(y) {</span>
-<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pmap</span>(grid, \(p, q) {</span>
-<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>    fit <span class="ot">&lt;-</span> <span class="fu">tryCatch</span>(<span class="fu">Arima</span>(y, <span class="at">order =</span> <span class="fu">c</span>(p, <span class="dv">1</span>, q), <span class="at">include.drift =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a>                    <span class="at">error =</span> <span class="cf">function</span>(e) <span class="cn">NULL</span>)</span>
-<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">is.null</span>(fit)) <span class="fu">return</span>(<span class="cn">NULL</span>)</span>
-<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">tibble</span>(<span class="at">p =</span> p, <span class="at">q =</span> q, <span class="at">aicc =</span> fit<span class="sc">$</span>aicc, <span class="at">bic =</span> fit<span class="sc">$</span>bic,</span>
-<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a>           <span class="co"># Ljung-Box on residuals, 8 lags (2 years): H0 = no autocorrelation</span></span>
-<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a>           <span class="at">lb_p =</span> <span class="fu">Box.test</span>(<span class="fu">residuals</span>(fit), <span class="at">lag =</span> <span class="dv">8</span>, <span class="at">type =</span> <span class="st">&quot;Ljung-Box&quot;</span>,</span>
-<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a>                           <span class="at">fitdf =</span> p <span class="sc">+</span> q)<span class="sc">$</span>p.value)</span>
-<span id="cb35-18"><a href="#cb35-18" aria-hidden="true" tabindex="-1"></a>  }) <span class="sc">%&gt;%</span> <span class="fu">list_rbind</span>()</span>
-<span id="cb35-19"><a href="#cb35-19" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb35-20"><a href="#cb35-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-21"><a href="#cb35-21" aria-hidden="true" tabindex="-1"></a>arima_grid <span class="ot">&lt;-</span> <span class="fu">imap</span>(arima_vars, \(v, b) <span class="fu">fit_grid</span>(<span class="fu">to_ts</span>(sample_2000[[v]])) <span class="sc">%&gt;%</span></span>
-<span id="cb35-22"><a href="#cb35-22" aria-hidden="true" tabindex="-1"></a>                     <span class="fu">mutate</span>(<span class="at">block =</span> blocks[[b]], <span class="at">.before =</span> <span class="dv">1</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb35-23"><a href="#cb35-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>()</span>
-<span id="cb35-24"><a href="#cb35-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-25"><a href="#cb35-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Best 3 models by BIC in each block</span></span>
-<span id="cb35-26"><a href="#cb35-26" aria-hidden="true" tabindex="-1"></a>arima_grid <span class="sc">%&gt;%</span></span>
-<span id="cb35-27"><a href="#cb35-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(block) <span class="sc">%&gt;%</span></span>
-<span id="cb35-28"><a href="#cb35-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_min</span>(bic, <span class="at">n =</span> <span class="dv">3</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb35-29"><a href="#cb35-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(aicc, bic, lb_p), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
-<span id="cb35-30"><a href="#cb35-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Strong-franc dummy for imported goods excl. oil: D_t = 1 in 2009Q1-2016Q4.</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a><span class="co"># It enters in levels as the cumulated dummy, so that after differencing it</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a><span class="co"># shifts quarterly growth by delta during that period only:</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a><span class="co">#   diff(y)_t = mu + delta * D_t + ARMA.</span></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a><span class="co"># In forecasts D = 0, i.e. the cumulated dummy stays at its last value, and</span></span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a><span class="co"># the block grows at the drift mu estimated outside the strong-franc period.</span></span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>strong_franc <span class="ot">&lt;-</span> <span class="cf">function</span>(dates) {</span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cbind</span>(<span class="at">strong_franc =</span> <span class="fu">cumsum</span>(dates <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">&quot;2009-01-01&quot;</span>) <span class="sc">&amp;</span> dates <span class="sc">&lt;=</span> <span class="fu">as.Date</span>(<span class="st">&quot;2016-10-01&quot;</span>)))</span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a>block_xreg <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">rent      =</span> <span class="cn">NULL</span>,</span>
+<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a>                   <span class="at">imp_xoil  =</span> <span class="fu">strong_franc</span>(sample_2000<span class="sc">$</span>date),</span>
+<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a>                   <span class="at">dom_xrent =</span> <span class="cn">NULL</span>)</span>
+<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-18"><a href="#cb35-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Candidates: ARIMA(p,1,q) with drift, p = 0..3, q = 0..2 (12 models),</span></span>
+<span id="cb35-19"><a href="#cb35-19" aria-hidden="true" tabindex="-1"></a><span class="co"># plus the strong-franc dummy for imported goods.</span></span>
+<span id="cb35-20"><a href="#cb35-20" aria-hidden="true" tabindex="-1"></a><span class="co"># No seasonal term: the series are seasonally adjusted.</span></span>
+<span id="cb35-21"><a href="#cb35-21" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">expand_grid</span>(<span class="at">p =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">3</span>, <span class="at">q =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">2</span>)</span>
+<span id="cb35-22"><a href="#cb35-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-23"><a href="#cb35-23" aria-hidden="true" tabindex="-1"></a>fit_grid <span class="ot">&lt;-</span> <span class="cf">function</span>(y, <span class="at">xreg =</span> <span class="cn">NULL</span>) {</span>
+<span id="cb35-24"><a href="#cb35-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pmap</span>(grid, \(p, q) {</span>
+<span id="cb35-25"><a href="#cb35-25" aria-hidden="true" tabindex="-1"></a>    fit <span class="ot">&lt;-</span> <span class="fu">tryCatch</span>(<span class="fu">Arima</span>(y, <span class="at">order =</span> <span class="fu">c</span>(p, <span class="dv">1</span>, q), <span class="at">include.drift =</span> <span class="cn">TRUE</span>, <span class="at">xreg =</span> xreg),</span>
+<span id="cb35-26"><a href="#cb35-26" aria-hidden="true" tabindex="-1"></a>                    <span class="at">error =</span> <span class="cf">function</span>(e) <span class="cn">NULL</span>)</span>
+<span id="cb35-27"><a href="#cb35-27" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">is.null</span>(fit)) <span class="fu">return</span>(<span class="cn">NULL</span>)</span>
+<span id="cb35-28"><a href="#cb35-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">tibble</span>(<span class="at">p =</span> p, <span class="at">q =</span> q, <span class="at">aicc =</span> fit<span class="sc">$</span>aicc, <span class="at">bic =</span> fit<span class="sc">$</span>bic,</span>
+<span id="cb35-29"><a href="#cb35-29" aria-hidden="true" tabindex="-1"></a>           <span class="co"># Ljung-Box on residuals, 8 lags (2 years): H0 = no autocorrelation</span></span>
+<span id="cb35-30"><a href="#cb35-30" aria-hidden="true" tabindex="-1"></a>           <span class="at">lb_p =</span> <span class="fu">Box.test</span>(<span class="fu">residuals</span>(fit), <span class="at">lag =</span> <span class="dv">8</span>, <span class="at">type =</span> <span class="st">&quot;Ljung-Box&quot;</span>,</span>
+<span id="cb35-31"><a href="#cb35-31" aria-hidden="true" tabindex="-1"></a>                           <span class="at">fitdf =</span> p <span class="sc">+</span> q)<span class="sc">$</span>p.value)</span>
+<span id="cb35-32"><a href="#cb35-32" aria-hidden="true" tabindex="-1"></a>  }) <span class="sc">%&gt;%</span> <span class="fu">list_rbind</span>()</span>
+<span id="cb35-33"><a href="#cb35-33" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb35-34"><a href="#cb35-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-35"><a href="#cb35-35" aria-hidden="true" tabindex="-1"></a>arima_grid <span class="ot">&lt;-</span> <span class="fu">imap</span>(arima_vars, \(v, b) <span class="fu">fit_grid</span>(<span class="fu">to_ts</span>(sample_2000[[v]]), block_xreg[[b]]) <span class="sc">%&gt;%</span></span>
+<span id="cb35-36"><a href="#cb35-36" aria-hidden="true" tabindex="-1"></a>                     <span class="fu">mutate</span>(<span class="at">block =</span> blocks[[b]], <span class="at">.before =</span> <span class="dv">1</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb35-37"><a href="#cb35-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>()</span>
+<span id="cb35-38"><a href="#cb35-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-39"><a href="#cb35-39" aria-hidden="true" tabindex="-1"></a><span class="co"># Best 3 models by BIC in each block</span></span>
+<span id="cb35-40"><a href="#cb35-40" aria-hidden="true" tabindex="-1"></a>arima_grid <span class="sc">%&gt;%</span></span>
+<span id="cb35-41"><a href="#cb35-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(block) <span class="sc">%&gt;%</span></span>
+<span id="cb35-42"><a href="#cb35-42" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_min</span>(bic, <span class="at">n =</span> <span class="dv">3</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb35-43"><a href="#cb35-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(aicc, bic, lb_p), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb35-44"><a href="#cb35-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>                 block p q    aicc     bic  lb_p
 1 Domestic excl. rents 1 1 -46.579 -36.321 0.187
 2 Domestic excl. rents 2 0 -45.721 -35.463 0.137
 3 Domestic excl. rents 2 2 -50.214 -35.082 0.528
-4   Imported excl. oil 2 0 181.278 191.535 0.421
-5   Imported excl. oil 0 2 183.568 193.826 0.191
-6   Imported excl. oil 2 1 182.283 195.000 0.334
+4   Imported excl. oil 0 2 175.793 188.511 0.198
+5   Imported excl. oil 2 0 176.014 188.731 0.284
+6   Imported excl. oil 2 1 176.304 191.437 0.216
 7                Rents 3 0 -33.344 -20.627 0.834
 8                Rents 1 1 -28.853 -18.596 0.222
 9                Rents 0 2 -28.556 -18.298 0.155</code></pre>
@@ -2762,33 +2776,35 @@ The following objects are masked from &#39;package:base&#39;:
 <span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-estimate the chosen models and show their coefficients</span></span>
 <span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>best_fits <span class="ot">&lt;-</span> <span class="fu">imap</span>(arima_orders, \(ord, b)</span>
-<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Arima</span>(<span class="fu">to_ts</span>(sample_2000[[arima_vars[[b]]]]), <span class="at">order =</span> ord, <span class="at">include.drift =</span> <span class="cn">TRUE</span>))</span>
-<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a><span class="fu">imap</span>(best_fits, \(fit, b) {</span>
-<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> blocks[[b]], <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(fit)),</span>
-<span id="cb37-14"><a href="#cb37-14" aria-hidden="true" tabindex="-1"></a>         <span class="at">estimate =</span> <span class="fu">coef</span>(fit), <span class="at">se =</span> <span class="fu">sqrt</span>(<span class="fu">diag</span>(fit<span class="sc">$</span>var.coef))) <span class="sc">%&gt;%</span></span>
-<span id="cb37-15"><a href="#cb37-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">t =</span> estimate <span class="sc">/</span> se)</span>
-<span id="cb37-16"><a href="#cb37-16" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
-<span id="cb37-17"><a href="#cb37-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb37-18"><a href="#cb37-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
-<span id="cb37-19"><a href="#cb37-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Arima</span>(<span class="fu">to_ts</span>(sample_2000[[arima_vars[[b]]]]), <span class="at">order =</span> ord, <span class="at">include.drift =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>        <span class="at">xreg =</span> block_xreg[[b]]))</span>
+<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a><span class="fu">imap</span>(best_fits, \(fit, b) {</span>
+<span id="cb37-14"><a href="#cb37-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> blocks[[b]], <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(fit)),</span>
+<span id="cb37-15"><a href="#cb37-15" aria-hidden="true" tabindex="-1"></a>         <span class="at">estimate =</span> <span class="fu">coef</span>(fit), <span class="at">se =</span> <span class="fu">sqrt</span>(<span class="fu">diag</span>(fit<span class="sc">$</span>var.coef))) <span class="sc">%&gt;%</span></span>
+<span id="cb37-16"><a href="#cb37-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">t =</span> estimate <span class="sc">/</span> se)</span>
+<span id="cb37-17"><a href="#cb37-17" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
+<span id="cb37-18"><a href="#cb37-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list_rbind</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb37-19"><a href="#cb37-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb37-20"><a href="#cb37-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>                  block  term estimate    se      t
-1                 Rents   ar1    0.847 0.092  9.232
-2                 Rents   ar2   -0.472 0.117 -4.031
-3                 Rents   ar3    0.350 0.097  3.617
-4                 Rents drift    0.361 0.067  5.381
-5    Imported excl. oil   ar1    0.157 0.090  1.740
-6    Imported excl. oil   ar2    0.404 0.091  4.458
-7    Imported excl. oil drift   -0.139 0.118 -1.176
-8  Domestic excl. rents   ar1    0.826 0.076 10.799
-9  Domestic excl. rents   ma1   -0.446 0.113 -3.967
-10 Domestic excl. rents drift    0.147 0.056  2.642</code></pre>
+<pre><code>                  block         term estimate    se      t
+1                 Rents          ar1    0.847 0.092  9.232
+2                 Rents          ar2   -0.472 0.117 -4.031
+3                 Rents          ar3    0.350 0.097  3.617
+4                 Rents        drift    0.361 0.067  5.381
+5    Imported excl. oil          ma1    0.129 0.087  1.480
+6    Imported excl. oil          ma2    0.400 0.098  4.090
+7    Imported excl. oil        drift    0.026 0.092  0.280
+8    Imported excl. oil strong_franc   -0.533 0.162 -3.285
+9  Domestic excl. rents          ar1    0.826 0.076 10.799
+10 Domestic excl. rents          ma1   -0.446 0.113 -3.967
+11 Domestic excl. rents        drift    0.147 0.056  2.642</code></pre>
 </div>
 </div>
 <p>We select the model with the lowest BIC, which penalises additional parameters more than the AICc and therefore favours parsimonious models, and check the residuals with a Ljung-Box test.</p>
 <p><strong>Rents: ARIMA(3,1,0) with drift.</strong> All coefficients are significant and the residuals show no autocorrelation (Ljung-Box p = 0.83). The three AR terms describe the slow, cyclical adjustment of rents, in line with yearly adjustments after reference-rate changes. The drift of 0.36 % per quarter (t = 5.4) implies long-run rent inflation of about 1.4 % per year.</p>
-<p><strong>Imported excl. oil: ARIMA(2,1,0) with drift.</strong> The second AR term is significant (0.40, t = 4.5) and the residuals are clean (p = 0.42). The drift is negative (−0.14 % per quarter) and not significant. It reflects the strong-franc period and would imply steadily falling import prices at long horizons; a model without drift or with a 2009–2016 dummy is the alternative.</p>
+<p><strong>Imported excl. oil: ARIMA(0,1,2) with drift and a dummy for 2009Q1–2016Q4.</strong> The strong-franc period is a temporary regime: after the franc’s appreciation in 2011 and the removal of the EUR/CHF floor in 2015, import prices fell for several years. The dummy shifts the mean growth of imported goods during these years only. It is significant: growth was 0.53 pp lower per quarter (t = −3.3). Outside this period the drift is close to zero (0.03 % per quarter, not significant), and this is the growth used in the forecast, where the dummy is zero. Including the dummy also improves the fit (BIC 188.5, against 191.5 for the best model without dummy). The second MA term is significant (0.40, t = 4.1), and the residuals show no autocorrelation (Ljung-Box p = 0.20).</p>
 <p><strong>Domestic excl. rents: ARIMA(1,1,1) with drift.</strong> Both coefficients are significant (ar1 = 0.83, ma1 = −0.45) and the residuals pass the Ljung-Box test (p = 0.19). The drift of 0.15 % per quarter (about 0.6 % per year) is significant (t = 2.6).</p>
 </section>
 <section id="oil-products-cointegration-and-ecm" class="level1">
@@ -2999,7 +3015,7 @@ d_usd_l1      -0.042      0.088  -0.485    0.629</code></pre>
 <div class="cell-output cell-output-stdout">
 <pre><code>                 block  jb_p arch_p
 1                Rents 0.001  0.364
-2   Imported excl. oil 0.000  0.339
+2   Imported excl. oil 0.001  0.376
 3 Domestic excl. rents 0.000  0.269
 4         Oil products 0.350  0.360</code></pre>
 </div>
@@ -3019,9 +3035,9 @@ d_usd_l1      -0.042      0.088  -0.485    0.629</code></pre>
 <span id="cb61-7"><a href="#cb61-7" aria-hidden="true" tabindex="-1"></a><span class="co"># quarters ahead. At h = 4 the error is the error on y-o-y inflation.</span></span>
 <span id="cb61-8"><a href="#cb61-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Benchmark: AR(1) on raw q-o-q inflation, i.e. ARIMA(1,1,0) with drift on</span></span>
 <span id="cb61-9"><a href="#cb61-9" aria-hidden="true" tabindex="-1"></a><span class="co"># the raw log level.</span></span>
-<span id="cb61-10"><a href="#cb61-10" aria-hidden="true" tabindex="-1"></a>first_origin <span class="ot">&lt;-</span> <span class="fu">which</span>(sample_2000<span class="sc">$</span>date <span class="sc">==</span> <span class="fu">as.Date</span>(<span class="st">&quot;2012-10-01&quot;</span>))</span>
+<span id="cb61-10"><a href="#cb61-10" aria-hidden="true" tabindex="-1"></a>first_index <span class="ot">&lt;-</span> <span class="fu">which</span>(sample_2000<span class="sc">$</span>date <span class="sc">==</span> <span class="fu">as.Date</span>(<span class="st">&quot;2012-10-01&quot;</span>))   <span class="co"># position of 2012Q4</span></span>
 <span id="cb61-11"><a href="#cb61-11" aria-hidden="true" tabindex="-1"></a>n_obs   <span class="ot">&lt;-</span> <span class="fu">nrow</span>(sample_2000)</span>
-<span id="cb61-12"><a href="#cb61-12" aria-hidden="true" tabindex="-1"></a>origins <span class="ot">&lt;-</span> first_origin<span class="sc">:</span>(n_obs <span class="sc">-</span> <span class="dv">1</span>)</span>
+<span id="cb61-12"><a href="#cb61-12" aria-hidden="true" tabindex="-1"></a>origins <span class="ot">&lt;-</span> first_index<span class="sc">:</span>(n_obs <span class="sc">-</span> <span class="dv">1</span>)</span>
 <span id="cb61-13"><a href="#cb61-13" aria-hidden="true" tabindex="-1"></a>h_max   <span class="ot">&lt;-</span> <span class="dv">4</span></span>
 <span id="cb61-14"><a href="#cb61-14" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb61-15"><a href="#cb61-15" aria-hidden="true" tabindex="-1"></a><span class="co"># ECM forecast of the adjusted oil level from origin t, with Brent and USD</span></span>
@@ -3055,45 +3071,50 @@ d_usd_l1      -0.042      0.088  -0.485    0.629</code></pre>
 <span id="cb61-43"><a href="#cb61-43" aria-hidden="true" tabindex="-1"></a>      <span class="fu">ecm_forecast</span>(<span class="fu">tibble</span>(<span class="at">oil =</span> adj<span class="sc">$</span>sa, <span class="at">brent =</span> hist<span class="sc">$</span>l_brent_usd,</span>
 <span id="cb61-44"><a href="#cb61-44" aria-hidden="true" tabindex="-1"></a>                          <span class="at">usd =</span> hist<span class="sc">$</span>l_chf_per_usd, <span class="at">trend =</span> <span class="dv">1</span><span class="sc">:</span>t), n_h)</span>
 <span id="cb61-45"><a href="#cb61-45" aria-hidden="true" tabindex="-1"></a>    } <span class="cf">else</span> {</span>
-<span id="cb61-46"><a href="#cb61-46" aria-hidden="true" tabindex="-1"></a>      <span class="fu">as.numeric</span>(<span class="fu">forecast</span>(<span class="fu">Arima</span>(<span class="fu">to_ts</span>(adj<span class="sc">$</span>sa), <span class="at">order =</span> arima_orders[[b]],</span>
-<span id="cb61-47"><a href="#cb61-47" aria-hidden="true" tabindex="-1"></a>                                <span class="at">include.drift =</span> <span class="cn">TRUE</span>), <span class="at">h =</span> n_h)<span class="sc">$</span>mean)</span>
-<span id="cb61-48"><a href="#cb61-48" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb61-49"><a href="#cb61-49" aria-hidden="true" tabindex="-1"></a>    f_ar1 <span class="ot">&lt;-</span> <span class="fu">forecast</span>(<span class="fu">Arima</span>(<span class="fu">to_ts</span>(raw[<span class="dv">1</span><span class="sc">:</span>t]), <span class="at">order =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">0</span>), <span class="at">include.drift =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb61-50"><a href="#cb61-50" aria-hidden="true" tabindex="-1"></a>                      <span class="at">h =</span> n_h)<span class="sc">$</span>mean</span>
-<span id="cb61-51"><a href="#cb61-51" aria-hidden="true" tabindex="-1"></a>    <span class="fu">tibble</span>(<span class="at">block =</span> blocks[[b]], <span class="at">origin =</span> sample_2000<span class="sc">$</span>date[t], <span class="at">h =</span> <span class="dv">1</span><span class="sc">:</span>n_h,</span>
-<span id="cb61-52"><a href="#cb61-52" aria-hidden="true" tabindex="-1"></a>           <span class="at">e_model =</span> raw[t <span class="sc">+</span> <span class="dv">1</span><span class="sc">:</span>n_h] <span class="sc">-</span> (f_sa <span class="sc">+</span> adj<span class="sc">$</span>sf_fc[<span class="dv">1</span><span class="sc">:</span>n_h]),</span>
-<span id="cb61-53"><a href="#cb61-53" aria-hidden="true" tabindex="-1"></a>           <span class="at">e_ar1   =</span> raw[t <span class="sc">+</span> <span class="dv">1</span><span class="sc">:</span>n_h] <span class="sc">-</span> <span class="fu">as.numeric</span>(f_ar1))</span>
-<span id="cb61-54"><a href="#cb61-54" aria-hidden="true" tabindex="-1"></a>  }) <span class="sc">%&gt;%</span> <span class="fu">list_rbind</span>()</span>
-<span id="cb61-55"><a href="#cb61-55" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span> <span class="fu">list_rbind</span>()</span>
-<span id="cb61-56"><a href="#cb61-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb61-57"><a href="#cb61-57" aria-hidden="true" tabindex="-1"></a><span class="co"># Accuracy at h = 1 and h = 4: RMSE, ratio to AR(1), Diebold-Mariano test.</span></span>
-<span id="cb61-58"><a href="#cb61-58" aria-hidden="true" tabindex="-1"></a><span class="co"># ratio &lt; 1: our model beats the AR(1). DM test: H0 = equally accurate.</span></span>
-<span id="cb61-59"><a href="#cb61-59" aria-hidden="true" tabindex="-1"></a>oos_errors <span class="sc">%&gt;%</span></span>
-<span id="cb61-60"><a href="#cb61-60" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(h <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">4</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb61-61"><a href="#cb61-61" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(<span class="at">block =</span> <span class="fu">factor</span>(block, <span class="at">levels =</span> blocks), h) <span class="sc">%&gt;%</span></span>
-<span id="cb61-62"><a href="#cb61-62" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n          =</span> <span class="fu">n</span>(),</span>
-<span id="cb61-63"><a href="#cb61-63" aria-hidden="true" tabindex="-1"></a>            <span class="at">rmse_model =</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>(e_model<span class="sc">^</span><span class="dv">2</span>)),</span>
-<span id="cb61-64"><a href="#cb61-64" aria-hidden="true" tabindex="-1"></a>            <span class="at">rmse_ar1   =</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>(e_ar1<span class="sc">^</span><span class="dv">2</span>)),</span>
-<span id="cb61-65"><a href="#cb61-65" aria-hidden="true" tabindex="-1"></a>            <span class="at">ratio      =</span> rmse_model <span class="sc">/</span> rmse_ar1,</span>
-<span id="cb61-66"><a href="#cb61-66" aria-hidden="true" tabindex="-1"></a>            <span class="at">dm_p       =</span> <span class="fu">dm.test</span>(e_model, e_ar1, <span class="at">h =</span> <span class="fu">first</span>(h), <span class="at">power =</span> <span class="dv">2</span>)<span class="sc">$</span>p.value,</span>
-<span id="cb61-67"><a href="#cb61-67" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb61-68"><a href="#cb61-68" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
-<span id="cb61-69"><a href="#cb61-69" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb61-46"><a href="#cb61-46" aria-hidden="true" tabindex="-1"></a>      <span class="co"># strong-franc dummy for imported goods, built on the data up to t;</span></span>
+<span id="cb61-47"><a href="#cb61-47" aria-hidden="true" tabindex="-1"></a>      <span class="co"># in the forecast the cumulated dummy stays at its last value (D = 0)</span></span>
+<span id="cb61-48"><a href="#cb61-48" aria-hidden="true" tabindex="-1"></a>      xr     <span class="ot">&lt;-</span> <span class="cf">if</span> (b <span class="sc">==</span> <span class="st">&quot;imp_xoil&quot;</span>) <span class="fu">strong_franc</span>(hist<span class="sc">$</span>date) <span class="cf">else</span> <span class="cn">NULL</span></span>
+<span id="cb61-49"><a href="#cb61-49" aria-hidden="true" tabindex="-1"></a>      xr_new <span class="ot">&lt;-</span> <span class="cf">if</span> (<span class="fu">is.null</span>(xr)) <span class="cn">NULL</span> <span class="cf">else</span> <span class="fu">matrix</span>(xr[t], n_h, <span class="dv">1</span>,</span>
+<span id="cb61-50"><a href="#cb61-50" aria-hidden="true" tabindex="-1"></a>                                                  <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="cn">NULL</span>, <span class="st">&quot;strong_franc&quot;</span>))</span>
+<span id="cb61-51"><a href="#cb61-51" aria-hidden="true" tabindex="-1"></a>      fit <span class="ot">&lt;-</span> <span class="fu">Arima</span>(<span class="fu">to_ts</span>(adj<span class="sc">$</span>sa), <span class="at">order =</span> arima_orders[[b]], <span class="at">include.drift =</span> <span class="cn">TRUE</span>, <span class="at">xreg =</span> xr)</span>
+<span id="cb61-52"><a href="#cb61-52" aria-hidden="true" tabindex="-1"></a>      <span class="fu">as.numeric</span>(<span class="fu">forecast</span>(fit, <span class="at">h =</span> n_h, <span class="at">xreg =</span> xr_new)<span class="sc">$</span>mean)</span>
+<span id="cb61-53"><a href="#cb61-53" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb61-54"><a href="#cb61-54" aria-hidden="true" tabindex="-1"></a>    f_ar1 <span class="ot">&lt;-</span> <span class="fu">forecast</span>(<span class="fu">Arima</span>(<span class="fu">to_ts</span>(raw[<span class="dv">1</span><span class="sc">:</span>t]), <span class="at">order =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">0</span>), <span class="at">include.drift =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb61-55"><a href="#cb61-55" aria-hidden="true" tabindex="-1"></a>                      <span class="at">h =</span> n_h)<span class="sc">$</span>mean</span>
+<span id="cb61-56"><a href="#cb61-56" aria-hidden="true" tabindex="-1"></a>    <span class="fu">tibble</span>(<span class="at">block =</span> blocks[[b]], <span class="at">origin =</span> sample_2000<span class="sc">$</span>date[t], <span class="at">h =</span> <span class="dv">1</span><span class="sc">:</span>n_h,</span>
+<span id="cb61-57"><a href="#cb61-57" aria-hidden="true" tabindex="-1"></a>           <span class="at">e_model =</span> raw[t <span class="sc">+</span> <span class="dv">1</span><span class="sc">:</span>n_h] <span class="sc">-</span> (f_sa <span class="sc">+</span> adj<span class="sc">$</span>sf_fc[<span class="dv">1</span><span class="sc">:</span>n_h]),</span>
+<span id="cb61-58"><a href="#cb61-58" aria-hidden="true" tabindex="-1"></a>           <span class="at">e_ar1   =</span> raw[t <span class="sc">+</span> <span class="dv">1</span><span class="sc">:</span>n_h] <span class="sc">-</span> <span class="fu">as.numeric</span>(f_ar1))</span>
+<span id="cb61-59"><a href="#cb61-59" aria-hidden="true" tabindex="-1"></a>  }) <span class="sc">%&gt;%</span> <span class="fu">list_rbind</span>()</span>
+<span id="cb61-60"><a href="#cb61-60" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span> <span class="fu">list_rbind</span>()</span>
+<span id="cb61-61"><a href="#cb61-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb61-62"><a href="#cb61-62" aria-hidden="true" tabindex="-1"></a><span class="co"># Accuracy at h = 1 and h = 4: RMSE, ratio to AR(1), Diebold-Mariano test.</span></span>
+<span id="cb61-63"><a href="#cb61-63" aria-hidden="true" tabindex="-1"></a><span class="co"># ratio &lt; 1: our model beats the AR(1). DM test: H0 = equally accurate.</span></span>
+<span id="cb61-64"><a href="#cb61-64" aria-hidden="true" tabindex="-1"></a>oos_errors <span class="sc">%&gt;%</span></span>
+<span id="cb61-65"><a href="#cb61-65" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(h <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">4</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb61-66"><a href="#cb61-66" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(<span class="at">block =</span> <span class="fu">factor</span>(block, <span class="at">levels =</span> blocks), h) <span class="sc">%&gt;%</span></span>
+<span id="cb61-67"><a href="#cb61-67" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n          =</span> <span class="fu">n</span>(),</span>
+<span id="cb61-68"><a href="#cb61-68" aria-hidden="true" tabindex="-1"></a>            <span class="at">rmse_model =</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>(e_model<span class="sc">^</span><span class="dv">2</span>)),</span>
+<span id="cb61-69"><a href="#cb61-69" aria-hidden="true" tabindex="-1"></a>            <span class="at">rmse_ar1   =</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>(e_ar1<span class="sc">^</span><span class="dv">2</span>)),</span>
+<span id="cb61-70"><a href="#cb61-70" aria-hidden="true" tabindex="-1"></a>            <span class="at">ratio      =</span> rmse_model <span class="sc">/</span> rmse_ar1,</span>
+<span id="cb61-71"><a href="#cb61-71" aria-hidden="true" tabindex="-1"></a>            <span class="at">dm_p       =</span> <span class="fu">dm.test</span>(e_model, e_ar1, <span class="at">h =</span> <span class="fu">first</span>(h), <span class="at">power =</span> <span class="dv">2</span>)<span class="sc">$</span>p.value,</span>
+<span id="cb61-72"><a href="#cb61-72" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb61-73"><a href="#cb61-73" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb61-74"><a href="#cb61-74" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>                 block h  n rmse_model rmse_ar1 ratio  dm_p
 1         Oil products 1 55      5.272    5.771 0.914 0.235
 2         Oil products 4 52     13.384   14.597 0.917 0.128
 3                Rents 1 55      0.169    0.159 1.062 0.293
 4                Rents 4 52      0.736    0.729 1.010 0.716
-5   Imported excl. oil 1 55      0.731    1.226 0.596 0.001
-6   Imported excl. oil 4 52      1.848    2.063 0.896 0.390
+5   Imported excl. oil 1 55      0.757    1.226 0.617 0.001
+6   Imported excl. oil 4 52      1.832    2.063 0.888 0.454
 7 Domestic excl. rents 1 55      0.305    0.424 0.719 0.020
 8 Domestic excl. rents 4 52      0.797    0.855 0.932 0.493</code></pre>
 </div>
 </div>
 <p>We evaluate the models by pseudo out-of-sample forecasting from 2012Q4 (55 forecasts one quarter ahead, 52 four quarters ahead). At each origin the seasonal adjustment, the estimation and the forecast use only the data available at that time, and the X-13 seasonal forecast is added back before comparing with the raw series.</p>
 <ul>
-<li><strong>Imported and domestic goods</strong> outperform the AR(1) one quarter ahead: errors are 40 % and 28 % smaller, and the difference is significant (DM p = 0.001 and 0.020). The gain comes from the seasonal adjustment, which the AR(1) does not have. Four quarters ahead our models remain better (ratios 0.90 and 0.93), but not significantly, as the seasonal pattern largely cancels over a full year.</li>
+<li><strong>Imported and domestic goods</strong> outperform the AR(1) one quarter ahead: errors are 38 % and 28 % smaller, and the difference is significant (DM p = 0.001 and 0.020). The gain comes from the seasonal adjustment, which the AR(1) does not have. Four quarters ahead our models remain better (ratios 0.89 and 0.93), but not significantly, as the seasonal pattern largely cancels over a full year.</li>
 <li><strong>Oil products (ECM)</strong> are forecast better than with the AR(1) at both horizons (ratio 0.91 and 0.92), but not significantly. Oil prices are difficult to forecast, and we assume constant Brent and USD after each origin.</li>
 <li><strong>Rents</strong> show no gain over the AR(1): both models perform equally, consistent with the absence of seasonality in rents.</li>
 </ul>
