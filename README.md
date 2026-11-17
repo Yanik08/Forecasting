@@ -48,40 +48,49 @@ selection, cointegration and ECM lag choice). Open `03_descriptive_analysis.html
 it, or render the `.qmd` in RStudio to re-run it. The numbers quoted in the report come
 from `04_model_estimation.qmd` (rendered as `04_model_estimation.html`).
 
-`Scripts/04_model_estimation.R`, `05_forecasting.R` and `06_evaluation.R` are the old
-version of the pipeline, from before the X-13 seasonal adjustment (seasonal AR terms, no
-strong-franc dummy). They are kept for reference only: `main.R` does not run them, and
-they are not consistent with the current `main.R` and `R/models.R`. Do not run them; use
-the `.qmd` files above.
+A full run of `main.R` takes about one minute; most of it is the recursive evaluation in 06,
+which re-runs X-13 and re-estimates every model at 55 origins.
 
 ## Models
 
 All block models use y = 100 × log(index) on 2000Q1–2026Q3, so Δy is quarter-on-quarter
-inflation in % and y_t − y_{t−4} is y-y inflation. The derivations of the optimal h-step
-forecasts are in the model document.
+inflation in % and y_t − y_{t−4} is y-y inflation. Each block is first seasonally adjusted
+with X-13ARIMA-SEATS (log transform, automatic ARIMA and outlier detection); the models are
+estimated on the adjusted series, and the seasonal component forecast by X-13 is added back
+before computing y-y inflation. Rents show no seasonality and are left unadjusted. The orders
+were selected by BIC in `03_descriptive_analysis.qmd` (section 5) and are set in `main.R`.
+The derivations of the optimal h-step forecasts are in the technical report
+(`report/report.tex`).
 
-| Block | Model | Drivers |
+| Block | Model (on X-13 adjusted series) | Drivers |
 |---|---|---|
 | Oil products | Error correction model (Engle–Granger), 1 lag | Brent (USD), CHF per USD, linear trend |
-| Rents | ARIMA(1,1,1)(1,0,0)₄ with drift | none |
-| Imported excl. oil | ARIMA(2,1,1)(1,0,0)₄ with drift | none |
-| Domestic excl. rents | ARIMA(0,1,0)(1,0,0)₄ with drift | none |
+| Rents | ARIMA(3,1,0) with drift | none |
+| Imported excl. oil | ARIMA(0,1,2) with drift and a strong-franc dummy (2009Q1–2016Q4) | none |
+| Domestic excl. rents | ARIMA(1,1,1) with drift | none |
 | CPI weights | Random walk: last observed weights held fixed | none |
 
-- **Point forecast:** each model is iterated forward with future shocks set to zero. Brent
-  and USD/CHF follow a random walk. The block forecasts are aggregated to headline CPI
-  link by link (quarterly links at Q4), with the 2026 weights.
+The strong-franc dummy enters the imported model as a cumulated dummy in levels, so it
+shifts quarterly growth during 2009Q1–2016Q4 only (−0.53 pp per quarter, t = −3.3). It is
+zero in the forecast, so the block grows at the drift estimated outside that period.
+
+- **Point forecast:** each model is iterated forward with future shocks set to zero, and the
+  X-13 seasonal component is added back. Brent and USD/CHF follow a random walk. The block
+  forecasts are aggregated to headline CPI link by link (quarterly links at Q4), with the
+  2026 weights.
 - **Density forecast:** 5,000 simulated paths. Each future quarter draws one past quarter
   and uses that quarter's residuals for all four blocks and its changes in Brent and
-  USD/CHF, so the correlation between blocks and drivers is kept.
+  USD/CHF, so the correlation between blocks and drivers is kept. Parameter uncertainty and
+  uncertainty about the seasonal pattern are not included.
 - **Scenario:** a permanent 50% rise in Brent from 2027Q1.
 - **Evaluation** (definitions as in the lecture slides, section 3.1): recursive
-  (expanding-window) forecasts from origins 2012Q4 to 2026Q2, horizons 1–12. Absolute
-  standards: Mincer–Zarnowitz, unbiasedness and strong efficiency (HAC tests), weak
-  efficiency (Ljung–Box on the residuals of an MA(h−1) fitted to the errors), and the
-  error variance by horizon. Relative standards: MSFE and MAFE ratios against an ARIMA on
-  headline CPI, a random walk on y-y inflation and the sample mean, with
-  Diebold–Mariano tests (Harvey–Leybourne–Newbold correction).
+  (expanding-window) forecasts from origins 2012Q4 to 2026Q2, horizons 1–12; at each origin
+  X-13 and all models are re-run on the data available at that date. Absolute standards:
+  Mincer–Zarnowitz, unbiasedness and strong efficiency (HAC tests), weak efficiency
+  (Ljung–Box on the residuals of an MA(h−1) fitted to the errors), and the error variance by
+  horizon. Relative standards: MSFE and MAFE ratios against four benchmarks — an
+  ARIMA(0,1,1) and an AR(1) on adjusted headline CPI, a random walk on y-y inflation and the
+  sample mean — with Diebold–Mariano tests (Harvey–Leybourne–Newbold correction).
 - **Re-aggregation check:** rebuilding headline y-y inflation from the four blocks gives a
   maximum gap of 0.14 pp from the published series since 2000 (mean 0.02 pp).
 
