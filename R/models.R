@@ -1,5 +1,5 @@
 # Model helpers ------------------------------------------------------------
-# Used by Scripts/04_model_estimation.R, 05_forecasting.R and 06_evaluation.R.
+# Used by Scripts/04_model_estimation.qmd, 05_forecasting.qmd and 06_evaluation.qmd.
 #
 # Notation follows the model doc ("Model Specifications by Block"):
 #   y = 100 * log(index), so diff(y) is quarter-on-quarter inflation in %
@@ -10,6 +10,11 @@
 # column per path. With zero shocks and one column you get the point
 # forecast (the optimal forecast derived in the doc); with random shocks and
 # many columns you get simulated paths for the density forecast.
+#
+# Seasonality: every block is seasonally adjusted with X-13ARIMA-SEATS
+# (x13_adjust), the models are estimated and forecast on the adjusted
+# series, and the seasonal component forecast by X-13 is added back before
+# aggregating to headline CPI. Same choice as in 03_descriptive_analysis.qmd.
 
 log100 <- function(x) 100 * log(x)
 
@@ -51,19 +56,75 @@ load_quarterly <- function(start) {
 }
 
 
-# 2. ARIMA blocks ------------------------------------------------------------
+# 2. Seasonal adjustment (X-13) ----------------------------------------------
 
-# ARIMA(p,1,q)(P,0,Q)_4 with drift, on the log level y.
+# X-13ARIMA-SEATS on one quarterly price index. We impose the log
+# transformation (we model logs) and keep the other defaults: automatic
+# ARIMA model, automatic outlier detection, SEATS decomposition. X-13 also
+# forecasts the seasonal component h quarters ahead (seats.appendfcst).
+# Returned on the log x 100 scale:
+#   sa:    seasonally adjusted series = 100 * log(index) - seasonal component
+#   sf_fc: seasonal component for the next h quarters (zero if X-13 finds
+#          no seasonality, as for rents)
+x13_adjust <- function(index, start_date, h) {
+  start <- c(lubridate::year(start_date), lubridate::quarter(start_date))
+  m <- suppressMessages(seasonal::seas(
+    stats::ts(index, start = start, frequency = 4),
+    transform.function = "log", seats.appendfcst = "yes",
+    forecast.maxlead = h, seats.save = "s10"))
+  s10 <- suppressMessages(seasonal::series(m, "s10"))
+  n   <- length(index)
+  sf  <- if (is.null(s10)) rep(0, n + h) else 100 * log(as.numeric(s10))[1:(n + h)]
+  list(model = m, sa = log100(index) - sf[1:n], sf_fc = sf[n + 1:h])
+}
+
+
+# 3. ARIMA blocks ------------------------------------------------------------
+
+# ARIMA(p,1,q) with drift, on the seasonally adjusted log level y. A seasonal
+# part (P,0,Q)_4 is optional (spec$seasonal); our blocks have none, since
+# the series are already adjusted.
 # The drift enters as a linear trend in levels (xreg = 1, 2, ..., n), which
 # after differencing is the constant mu of the doc: (diff(y) - mu) is ARMA.
+#
+# Period dummy (spec$dummy = c(from, to), optional): shifts mean growth by
+# delta during that period. It enters in levels as the cumulated dummy, so
+# that after differencing it is D_t = 1 inside the period and 0 outside:
+#   diff(y)_t = mu + delta * D_t + ARMA.
+# Used for imported goods excl. oil over the strong-franc period
+# 2009Q1-2016Q4 (see main.R). As for all outlier dummies, D = 0 in the
+# forecast, so the forecast grows at mu only.
+# `dates` are the quarters of y, needed to place the dummy.
+#
 # Estimation by maximum likelihood (stats::arima, CSS for starting values);
 # if that fails to converge in a short recursive sample, fall back to CSS.
-fit_arima <- function(y, spec) {
+fit_arima <- function(y, spec, dates = NULL) {
+  seasonal_order <- if (is.null(spec$seasonal)) c(0, 0, 0) else spec$seasonal
+  xreg <- cbind(drift = seq_along(y))
+  dummy_growth <- NULL
+  if (!is.null(spec$dummy)) {
+    D <- as.numeric(dates >= as.Date(spec$dummy[["from"]]) &
+                    dates <= as.Date(spec$dummy[["to"]]))
+    if (any(D == 1)) {                  # only if the period is in the sample
+      xreg <- cbind(xreg, dummy = cumsum(D))
+      dummy_growth <- D
+    }
+  }
   args <- list(x = y, order = spec$order,
-               seasonal = list(order = spec$seasonal, period = 4),
-               xreg = cbind(drift = seq_along(y)))
-  tryCatch(do.call(stats::arima, args),
-           error = function(e) do.call(stats::arima, c(args, method = "CSS")))
+               seasonal = list(order = seasonal_order, period = 4), xreg = xreg)
+  fit <- tryCatch(do.call(stats::arima, args),
+                  error = function(e) do.call(stats::arima, c(args, method = "CSS")))
+  fit$dummy_growth <- dummy_growth      # D_t per quarter, used by arima_paths()
+  fit
+}
+
+# Regressors for the h quarters after the sample, as needed by predict():
+# the drift continues (n + 1, ..., n + h) and the cumulated dummy stays at
+# its last value (D = 0 in the forecast).
+arima_newxreg <- function(fit, n, h) {
+  out <- cbind(drift = n + 1:h)
+  if (!is.null(fit$dummy_growth)) out <- cbind(out, dummy = sum(fit$dummy_growth))
+  out
 }
 
 # Multiply two lag polynomials given as coefficient vectors c(1, c1, c2, ...)
@@ -93,7 +154,8 @@ arima_polys <- function(fit) {
   p <- fit$arma[1]; q <- fit$arma[2]; P <- fit$arma[3]; Q <- fit$arma[4]
   ar_poly <- polymul(c(1, -get("ar", p)), seasonal_poly(-get("sar", P)))
   ma_poly <- polymul(c(1,  get("ma", q)), seasonal_poly( get("sma", Q)))
-  list(a = -ar_poly[-1], m = ma_poly[-1], mu = unname(cf["drift"]))
+  delta <- if ("dummy" %in% names(cf)) unname(cf["dummy"]) else 0
+  list(a = -ar_poly[-1], m = ma_poly[-1], mu = unname(cf["drift"]), delta = delta)
 }
 
 # Steps 2 and 3 of the derivation: iterate x forward, then cumulate back to
@@ -104,7 +166,9 @@ arima_polys <- function(fit) {
 # Returns an h x N matrix of forecast log levels y_{T+1}, ..., y_{T+h}.
 arima_paths <- function(fit, y, h, shocks = matrix(0, h, 1)) {
   pl <- arima_polys(fit)
-  x_hist <- diff(y) - pl$mu
+  # observed growth minus its mean: mu, plus delta inside the dummy period
+  dummy  <- if (is.null(fit$dummy_growth)) 0 else fit$dummy_growth[-1]
+  x_hist <- diff(y) - pl$mu - pl$delta * dummy
   e_hist <- as.numeric(stats::residuals(fit))[-1]   # aligned with diff(y)
   n_x <- length(x_hist); N <- ncol(shocks)
   P <- length(pl$a); Q <- length(pl$m)
@@ -119,12 +183,12 @@ arima_paths <- function(fit, y, h, shocks = matrix(0, h, 1)) {
     ma <- if (Q > 0) colSums(pl$m * E[t - seq_len(Q), , drop = FALSE]) else 0
     X[t, ] <- ar + E[t, ] + ma
   }
-  dy <- X[n_x + 1:h, , drop = FALSE] + pl$mu          # q-q inflation forecasts
+  dy <- X[n_x + 1:h, , drop = FALSE] + pl$mu          # q-q inflation forecasts (D = 0)
   y[length(y)] + matrix(apply(dy, 2, cumsum), h, N)    # back to log levels
 }
 
 
-# 3. Oil ECM -----------------------------------------------------------------
+# 4. Oil ECM -----------------------------------------------------------------
 
 # Engle-Granger two-step estimation.
 # Long run:  oil_t = b0 + b1 brent_t + b2 usd_t + delta t + ect_t
@@ -185,7 +249,7 @@ ecm_paths <- function(fit, h, brent_fc, usd_fc, shocks = matrix(0, h, 1)) {
 random_walk <- function(x, h, N = 1) matrix(x[length(x)], h, N)
 
 
-# 4. Aggregation to headline CPI ---------------------------------------------
+# 5. Aggregation to headline CPI ---------------------------------------------
 
 # The CPI is chained every December with that year's basket weights. In
 # quarterly data we link at Q4 (the quarter that contains December):
@@ -240,28 +304,41 @@ latest_weights <- function(hist) {
 }
 
 
-# 5. One full forecast from an origin ----------------------------------------
+# 6. One full forecast from an origin ----------------------------------------
 
-# Fits all four block models on `hist` (data up to the origin) and returns
-# the point forecast of headline y-y inflation for h = 1, ..., H, with
-# random-walk Brent and USD/CHF. Used for the recursive evaluation (06) and
-# the final forecast (05).
-forecast_point <- function(hist, H, specs) {
+# Step 1: seasonal adjustment and estimation on `hist` (data up to the
+# origin). X-13 on each block, then the ECM on adjusted oil products and an
+# ARIMA on each other adjusted block.
+# Returns, per block: sa (adjusted log level), sf_fc (seasonal component
+# forecast for H quarters), and the fitted models (ecm, arima).
+fit_blocks <- function(hist, H, specs) {
+  adj <- lapply(stats::setNames(nm = block_names), function(b)
+    x13_adjust(hist[[paste0("cpi_", b)]], min(hist$date), H))
+  ecm <- fit_ecm(adj$oil$sa, hist$y_brent, hist$y_usd)
+  arima <- lapply(stats::setNames(nm = setdiff(block_names, "oil")), function(b)
+    fit_arima(adj[[b]]$sa, specs[[b]], hist$date))
+  list(adj = adj, ecm = ecm, arima = arima)
+}
+
+# Step 2: forecast. Each block is forecast on the adjusted scale (random-walk
+# Brent and USD/CHF for the ECM), the X-13 seasonal component is added back,
+# and the four blocks are aggregated to headline y-y inflation for
+# h = 1, ..., H. Used for the recursive evaluation (06) and the final
+# forecast (05). `fits` can be passed to avoid estimating twice.
+forecast_point <- function(hist, H, specs, fits = fit_blocks(hist, H, specs)) {
   fc_dates <- seq(max(hist$date), by = "quarter", length.out = H + 1)[-1]
-  ecm <- fit_ecm(hist$y_oil, hist$y_brent, hist$y_usd)
-  fc_y <- list(oil = ecm_paths(ecm, H, random_walk(hist$y_brent, H),
-                               random_walk(hist$y_usd, H)))
-  for (b in setdiff(block_names, "oil")) {
-    y <- hist[[paste0("y_", b)]]
-    fc_y[[b]] <- arima_paths(fit_arima(y, specs[[b]]), y, H)
+  fc_y <- list(oil = ecm_paths(fits$ecm, H, random_walk(hist$y_brent, H),
+                               random_walk(hist$y_usd, H)) + fits$adj$oil$sf_fc)
+  for (b in names(fits$arima)) {
+    fc_y[[b]] <- arima_paths(fits$arima[[b]], fits$adj[[b]]$sa, H) + fits$adj[[b]]$sf_fc
   }
-  list(dates = fc_dates, blocks = fc_y,
-       headline = drop(aggregate_headline(hist, fc_dates, fc_y,
+  list(dates = fc_dates, blocks = fc_y[block_names], fits = fits,
+       headline = drop(aggregate_headline(hist, fc_dates, fc_y[block_names],
                                           latest_weights(hist))))
 }
 
 
-# 6. Evaluation helpers ------------------------------------------------------
+# 7. Evaluation helpers ------------------------------------------------------
 
 # Wald test of R b = r with a HAC (Newey-West) covariance. Forecast errors
 # at horizon h overlap, so they follow an MA(h-1): lag = h - 1.
