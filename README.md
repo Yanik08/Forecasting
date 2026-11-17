@@ -48,6 +48,12 @@ selection, cointegration and ECM lag choice). Open `03_descriptive_analysis.html
 it, or render the `.qmd` in RStudio to re-run it. The numbers quoted in the report come
 from `04_model_estimation.qmd` (rendered as `04_model_estimation.html`).
 
+`Scripts/04_model_estimation.R`, `05_forecasting.R` and `06_evaluation.R` are the old
+version of the pipeline, from before the X-13 seasonal adjustment (seasonal AR terms, no
+strong-franc dummy). They are kept for reference only: `main.R` does not run them, and
+they are not consistent with the current `main.R` and `R/models.R`. Do not run them; use
+the `.qmd` files above.
+
 ## Models
 
 All block models use y = 100 × log(index) on 2000Q1–2026Q3, so Δy is quarter-on-quarter
