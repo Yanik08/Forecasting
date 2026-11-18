@@ -405,3 +405,19 @@ evaluated %>%
   mutate(across(where(is.double), ~ round(.x, 2))) %>%
   as.data.frame()
 ```
+
+```{r diag-band-width}
+# Are the density bands as wide as our out-of-sample errors imply?
+# With unbiased, roughly normal errors, the 90% band should be about
+# +/- 1.645 * RMSE and the 68% band about +/- 1 * RMSE.
+read_csv(here("output", "forecast_headline.csv"), show_col_types = FALSE) %>%
+  mutate(h = row_number(),
+         half_90 = (q95 - q5) / 2,
+         half_68 = (q84 - q16) / 2) %>%
+  left_join(read_csv(here("output", "eval_absolute.csv"), show_col_types = FALSE) %>%
+              select(h, rmse), by = "h") %>%
+  transmute(h, date, half_90, implied_90 = 1.645 * rmse, ratio_90 = half_90 / implied_90,
+            half_68, rmse, ratio_68 = half_68 / rmse) %>%
+  mutate(across(where(is.double), ~ round(.x, 2))) %>%
+  as.data.frame()
+```
