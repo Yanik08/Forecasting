@@ -61,7 +61,7 @@ names(quarterly)
 
 ```{r}
 # Readable names for the 5 series (headline + 4 blocks)
-block_names <- c(l_cpi_total     = "Headline CPI",
+series_names <- c(l_cpi_total     = "Headline CPI",
                  l_cpi_oil       = "Oil products",
                  l_cpi_rent      = "Rents",
                  l_cpi_imp_xoil  = "Imported excl. oil",
@@ -70,13 +70,13 @@ block_names <- c(l_cpi_total     = "Headline CPI",
 # Long format (one row per quarter and series), with the quarterly change
 # (q-o-q) and the change over 4 quarters (y-o-y), both in %
 inflation <- quarterly %>%
-  select(date, all_of(names(block_names))) %>%
+  select(date, all_of(names(series_names))) %>%
   pivot_longer(-date, names_to = "series", values_to = "log_index") %>%
   group_by(series) %>%
   mutate(qoq = log_index - lag(log_index),
          yoy = log_index - lag(log_index, 4)) %>%
   ungroup() %>%
-  mutate(series = factor(block_names[series], levels = block_names))
+  mutate(series = factor(series_names[series], levels = series_names))
 
 # Levels: trends and breaks
 ggplot(inflation, aes(date, log_index)) +
@@ -206,7 +206,10 @@ blocks <- c(oil       = "Oil products",
             imp_xoil  = "Imported excl. oil",
             dom_xrent = "Domestic excl. rents")
 
-# X-13 on one price index. We impose the log transformation (we model logs)
+# X-13 on one price index starting at start_date, with the seasonal
+# component forecast h quarters ahead. Same function (and arguments) as
+# x13_adjust() in R/models.R, used by scripts 04-06.
+# We impose the log transformation (we model logs)
 # and keep the other defaults: automatic ARIMA model, automatic outlier
 # detection, SEATS decomposition. X-13 also forecasts the seasonal component
 # h quarters ahead (seats.appendfcst), which we need to put the seasonality
@@ -214,8 +217,9 @@ blocks <- c(oil       = "Oil products",
 #   sa:    seasonally adjusted series = log level - seasonal component
 #   sf_fc: forecast of the seasonal component for the next h quarters
 #          (zero if X-13 finds no seasonality)
-x13_adjust <- function(index, h = 4) {
-  m <- suppressMessages(seas(ts(index, start = c(2000, 1), frequency = 4),
+x13_adjust <- function(index, start_date, h) {
+  start <- c(year(start_date), quarter(start_date))
+  m <- suppressMessages(seas(ts(index, start = start, frequency = 4),
                              transform.function = "log", seats.appendfcst = "yes",
                              forecast.maxlead = h, seats.save = "s10"))
   s10 <- suppressMessages(series(m, "s10"))
@@ -224,7 +228,8 @@ x13_adjust <- function(index, h = 4) {
   list(model = m, sa = 100 * log(index) - sf[1:n], sf_fc = sf[n + 1:h])
 }
 
-x13_fits <- map(names(blocks), \(b) x13_adjust(sample_2000[[paste0("cpi_", b)]])) %>%
+x13_fits <- map(names(blocks), \(b) x13_adjust(sample_2000[[paste0("cpi_", b)]],
+                                                         start_date = min(sample_2000$date), h = 4)) %>%
   set_names(names(blocks))
 
 # Adjusted series (sa_oil, sa_rent, ...) added to the estimation sample
@@ -372,19 +377,11 @@ arima_orders <- map(names(arima_vars), \(b) {
   c(row$p, 1, row$q)
 }) %>% set_names(names(arima_vars))
 
-# Re-estimate the chosen models and show their coefficients
+# Re-estimate the chosen models, used for the diagnostics (section 7).
+# The coefficient table is reported in 04_model_estimation.qmd, section 2.
 best_fits <- imap(arima_orders, \(ord, b)
   Arima(to_ts(sample_2000[[arima_vars[[b]]]]), order = ord, include.drift = TRUE,
         xreg = block_xreg[[b]]))
-
-imap(best_fits, \(fit, b) {
-  tibble(block = blocks[[b]], term = names(coef(fit)),
-         estimate = coef(fit), se = sqrt(diag(fit$var.coef))) %>%
-    mutate(t = estimate / se)
-}) %>%
-  list_rbind() %>%
-  mutate(across(where(is.double), ~ round(.x, 3))) %>%
-  as.data.frame()
 ```
 
 We select the model with the lowest BIC, which penalises additional parameters more than the AICc and therefore favours parsimonious models, and check the residuals with a Ljung-Box test.
@@ -406,15 +403,27 @@ oil <- sample_2000 %>%
             usd   = l_chf_per_usd,    # CHF per USD
             trend = row_number())     # linear trend (1, 2, 3, ...)
 
-# --- 1. Long-run relation (static regression in levels) ---
+```
+
+### Long-run relation (static regression in levels)
+
+```{r}
 # Without and with a linear trend; the trend captures slowly rising
 # taxes and margins (mineral oil tax, CO2 levy since 2008)
 lr_const <- lm(oil ~ brent + usd,         data = oil)
 lr_trend <- lm(oil ~ brent + usd + trend, data = oil)
 summary(lr_const)$coefficients
 summary(lr_trend)$coefficients
+```
 
-# --- 2. Engle-Granger test: is the long-run residual stationary? ---
+The long-run relation depends on the trend. With a constant only, the USD coefficient has the wrong sign (−0.09). With a trend, all coefficients are significant: Brent 0.42, USD 0.60, trend 0.41 % per quarter (about 1.6 % per year).
+
+We interpret the trend economically: Swiss fuel prices include per-litre taxes (mineral oil tax, CO2 levy since 2008) and distribution margins that rise over time independently of crude prices. These components also explain why the Brent elasticity is below 1.
+
+### Engle-Granger cointegration test
+
+```{r}
+# Is the long-run residual (the gap) stationary?
 # ADF on the residuals, no constant (they have mean 0 by construction).
 # Critical values are not the usual ADF ones, because the residuals come
 # from an estimated regression. MacKinnon (2010), 3 variables, 5% level:
@@ -427,14 +436,25 @@ tibble(long_run = c("constant", "constant + trend"),
        cv_5pct  = c(-3.74, -4.10)) %>%
   mutate(cointegrated = eg_stat < cv_5pct)
 
-# --- 3. Johansen trace test (system approach, robustness check) ---
+```
+
+With a constant only, the Engle-Granger test does not reject (−3.18 vs −3.74): without the trend there is no stable long-run relation. With a trend, it rejects clearly (−5.87 vs −4.10): oil products, Brent and USD are cointegrated.
+
+### Johansen trace test (system approach, robustness check)
+
+```{r}
 # r = number of cointegrating relations; reject "r = 0" if stat > critical value.
 # K = 2 lags in levels, trend in the cointegrating relation.
 johansen <- ca.jo(oil[, c("oil", "brent", "usd")], type = "trace",
                   ecdet = "trend", K = 2, spec = "transitory")
 cbind(stat = round(johansen@teststat, 2), johansen@cval)
+```
 
-# --- 4. Are Brent and USD exogenous? ---
+The trace test rejects r = 0 at 5 % (44.14 \> 42.44) and does not reject r ≤ 1 (17.03 \< 25.32). Both tests therefore find exactly one cointegrating relation.
+
+### Are Brent and USD exogenous?
+
+```{r}
 # The single-equation ECM treats Brent and USD as given. Two checks:
 # (a) Weak exogeneity: in the Johansen VECM, Brent and USD do not adjust to
 #     the long-run gap (alpha_brent = alpha_usd = 0). LR test of this
@@ -455,33 +475,28 @@ tibble(driver  = c("Brent", "USD"),
        p_value = c(grangertest(d_brent ~ d_oil, order = 4, data = oil_diff)$`Pr(>F)`[2],
                    grangertest(d_usd   ~ d_oil, order = 4, data = oil_diff)$`Pr(>F)`[2])) %>%
   mutate(p_value = round(p_value, 3))
-
-# --- 5. Same effect of Brent and of the exchange rate? ---
-# If b_brent = b_usd, only Brent in CHF matters. Re-parametrised so that the
-# coefficient on usd is b_usd - b_brent: H0 = this coefficient is 0.
-summary(lm(oil ~ I(brent + usd) + usd + trend, data = oil))$coefficients["usd", ]
 ```
 
-**Long-run relation.** The result depends on the trend.
-
-- With a constant only, the USD coefficient has the wrong sign (−0.09) and the Engle-Granger test does not reject (−3.18 vs −3.74).
-- With a trend, all coefficients are significant: Brent 0.42, USD 0.60, trend 0.41 % per quarter (about 1.6 % per year). The Engle-Granger test rejects (−5.87 vs −4.10).
-
-We interpret the trend economically: Swiss fuel prices include per-litre taxes (mineral oil tax, CO2 levy since 2008) and distribution margins that rise over time independently of crude prices. These components also explain why the Brent elasticity is below 1.
-
-**Johansen test.** The trace test rejects r = 0 at 5 % (44.14 \> 42.44) and does not reject r ≤ 1 (17.03 \< 25.32). Both tests therefore find exactly one cointegrating relation.
-
-**Exogeneity of Brent and USD.** The single-equation ECM assumes that the drivers do not depend on Swiss oil product prices. Both checks support this:
+The single-equation ECM assumes that the drivers do not depend on Swiss oil product prices. Both checks support this:
 
 - Weak exogeneity: in the Johansen VECM, the restriction that only oil products adjust to the long-run gap is not rejected (LR = 0.30, p = 0.86). The adjustment coefficients are −0.45 for oil products, against −0.08 for Brent and 0.07 for USD.
 - No feedback: past oil product inflation does not Granger-cause Brent (p = 0.33) or USD (p = 0.26).
 
 We therefore treat Brent and USD as exogenous and estimate a single equation for oil products. The VECM adjustment coefficient of oil products (−0.45) is also very close to the one of the ECM below.
 
-**Brent vs. exchange rate.** Equal elasticities are rejected (t = 3.88 on b_usd − b_brent = 0.18), so we keep Brent and the USD rate as separate variables rather than using Brent in CHF.
+### Same effect of Brent and of the exchange rate?
+
+```{r}
+# If b_brent = b_usd, only Brent in CHF matters. Re-parametrised so that the
+# coefficient on usd is b_usd - b_brent: H0 = this coefficient is 0.
+summary(lm(oil ~ I(brent + usd) + usd + trend, data = oil))$coefficients["usd", ]
+```
+
+Equal elasticities are rejected (t = 3.88 on b_usd − b_brent = 0.18), so we keep Brent and the USD rate as separate variables rather than using Brent in CHF.
+
+### Short-run dynamics: ECM and lag selection
 
 ```{r oil-ecm}
-# --- 6. ECM lag selection ---
 # d_oil_t = c + alpha * ect_(t-1) + b * d_brent_t + g * d_usd_t
 #           + L lags of d_oil, d_brent and d_usd
 # ect = residual of the long-run relation with trend (deviation from equilibrium)
@@ -507,7 +522,7 @@ ecm_formula <- function(L) {
 
 # All models on the same sample (lose the first 5 quarters), so BIC is comparable
 ecm_sample <- ecm_data %>% slice(6:n())
-map(0:4, \(L) {
+ecm_lags <- map(0:4, \(L) {
   fit <- lm(ecm_formula(L), data = ecm_sample)
   tibble(lags    = L,
          bic     = BIC(fit),
@@ -519,12 +534,19 @@ map(0:4, \(L) {
   list_rbind() %>%
   mutate(across(where(is.double), ~ round(.x, 3)))
 
-# Chosen ECM (1 lag), estimated on all available quarters
-ecm_fit <- lm(ecm_formula(1), data = ecm_data)
+# BIC table: one row per number of lags (lower BIC = better)
+ecm_lags %>% as.data.frame()
+
+# Chosen number of lags: lowest BIC
+ecm_L <- ecm_lags$lags[which.min(ecm_lags$bic)]
+ecm_L
+
+# Chosen ECM, estimated on all available quarters
+ecm_fit <- lm(ecm_formula(ecm_L), data = ecm_data)
 round(summary(ecm_fit)$coefficients, 3)
 ```
 
-**Short-run dynamics.** BIC selects 1 lag (514 vs 523 with no lags), and the residuals show no autocorrelation (Ljung-Box p = 0.36).
+BIC selects 1 lag (514 vs 523 with no lags), and the residuals show no autocorrelation (Ljung-Box p = 0.36).
 
 - α = −0.45 (t = −5.2): about 45 % of a deviation from the long-run equilibrium is corrected each quarter (half-life of about 1.2 quarters).
 - Pass-through is fast: within the same quarter, Brent passes 0.30 and the USD rate 0.49, compared with long-run elasticities of 0.42 and 0.60.
@@ -572,7 +594,9 @@ origins <- first_index:(n_obs - 1)
 h_max   <- 4
 
 # ECM forecast of the adjusted oil level from origin t, with Brent and USD
-# held at their last value (random walk: d_brent = d_usd = 0 after t)
+# held at their last value (random walk: d_brent = d_usd = 0 after t).
+# The recursion below is written for the ECM chosen in section 6 (1 lag).
+stopifnot(ecm_L == 1)
 ecm_forecast <- function(oil_t, h) {
   lr    <- lm(oil ~ brent + usd + trend, data = oil_t)
   d     <- make_ecm_data(oil_t, lr, max_lag = 1)
@@ -597,7 +621,7 @@ oos_errors <- map(origins, \(t) {
   hist <- sample_2000 %>% slice(1:t)
   map(names(blocks), \(b) {
     raw <- 100 * log(sample_2000[[paste0("cpi_", b)]])
-    adj <- x13_adjust(hist[[paste0("cpi_", b)]], h = h_max)
+    adj <- x13_adjust(hist[[paste0("cpi_", b)]], start_date = min(hist$date), h = h_max)
     f_sa <- if (b == "oil") {
       ecm_forecast(tibble(oil = adj$sa, brent = hist$l_brent_usd,
                           usd = hist$l_chf_per_usd, trend = 1:t), n_h)

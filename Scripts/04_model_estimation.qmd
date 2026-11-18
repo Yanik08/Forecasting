@@ -138,6 +138,8 @@ write_csv(ecm_table, here("output", "estimates_ecm.csv"))
 
 **Short run.** The adjustment coefficient α = −0.45 (t = −5.2) is negative and significant: about 45 % of a deviation from the long-run level is corrected each quarter. Within the same quarter, Brent passes 0.30 and the USD rate 0.49. The model explains 83 % of quarterly oil product inflation, and the residuals show no autocorrelation (Ljung-Box p = 0.45).
 
+check if ECM is right model for oil
+
 ```{r}
 # The three variables of the oil block
 oil_vars <- list(oil = sa$oil, brent = q$y_brent, usd = q$y_usd)
