@@ -92,15 +92,23 @@ recursive <- map_dfr(origins, function(t) {
     y_all[length(y) + 1:H] - y_all[length(y) + 1:H - 4]
   }
 
-  tibble(origin = q$date[t], h = 1:H, target = fc$dates,
-         model = fc$headline,
-         arima = headline_yy(arima_specs$headline),
-         ar1   = headline_yy(arima_specs$headline_ar1),
-         rw    = hist$pi_cpi[t],
-         mean = mean(hist$pi_cpi, na.rm = TRUE),
-         # information known at the origin, for the strong-efficiency test
-         pi_origin = hist$pi_cpi[t],
-         brent_yy_origin = hist$y_brent[t] - hist$y_brent[t - 4])
+  n_t <- nrow(hist)
+  blk_yy <- map_dfc(setNames(nm = block_names), function(b) {
+    y_all <- c(hist[[paste0("y_", b)]], drop(fc$blocks[[b]]))
+    y_all[n_t + 1:H] - y_all[n_t + 1:H - 4]
+  }) %>% rename_with(~ paste0("fc_", .x))
+  w_t <- as_tibble_row(setNames(latest_weights(hist), paste0("w_", block_names)))
+  
+  bind_cols(
+    tibble(origin = q$date[t], h = 1:H, target = fc$dates,
+           model = fc$headline,
+           arima = headline_yy(arima_specs$headline),
+           ar1   = headline_yy(arima_specs$headline_ar1),
+           rw    = hist$pi_cpi[t],
+           mean  = mean(hist$pi_cpi, na.rm = TRUE),
+           pi_origin = hist$pi_cpi[t],
+           brent_yy_origin = hist$y_brent[t] - hist$y_brent[t - 4]),
+    blk_yy, w_t)
 })
 
 # Add the outcome (observed headline y-y inflation at the target date)
@@ -111,6 +119,21 @@ write_csv(recursive, here("output", "eval_forecasts.csv"))
 # Forecasts with an observed outcome, and their errors (e = actual - forecast)
 evaluated <- recursive %>% filter(!is.na(actual)) %>% mutate(error = actual - model)
 count(evaluated, h) %>% as.data.frame()
+
+# Case study at h = 8 (two years ahead): for a few origins with inflation far
+# from its long-run level (2015-16 strong franc, 2019 pre-COVID, 2021-23 surge),
+# compare the move our forecast predicted away from current inflation
+# (model - pi_origin) with the move that actually happened (actual - pi_origin).
+# Same sign and similar size = the predicted mean reversion took place.
+evaluated %>%
+  filter(h == 8,
+         origin %in% as.Date(c("2015-04-01", "2016-01-01", "2019-10-01",
+                               "2021-01-01", "2022-07-01", "2023-04-01"))) %>%
+  transmute(origin, pi_origin, model, actual,
+            predicted_move = model - pi_origin,
+            actual_move    = actual - pi_origin) %>%
+  mutate(across(-origin, ~ round(.x, 2))) %>%
+  as.data.frame()
 ```
 
 # 2. Spaghetti chart
@@ -252,3 +275,149 @@ relative %>%
 - **Headline AR(1)**: our model is more accurate one quarter ahead (MSFE ratio 0.93, not significant), but less accurate from two to five quarters ahead (ratios 1.12 to 1.22), significantly so at h = 3, 4 and 5 (p \< 0.05). From six quarters on the difference is small (ratios 1.02 to 1.09) and not significant.
 
 Forecasting the four blocks separately clearly outperforms the naive benchmarks (random walk and mean). Against direct models of headline inflation, it is more accurate one quarter ahead, but not at longer horizons: the AR(1) is more accurate at horizons of two to five quarters. The errors of the four block models add up in the aggregate, while a single model of headline inflation benefits from errors of the components partly offsetting each other. The bottom-up model nevertheless shows which components drive inflation and allows conditional forecasts for oil prices (section 3 of 05), which a direct model of headline CPI does not.
+
+# 5. Diagnostics: why does the AR(1) win at medium horizons?
+
+Exploratory checks, not (yet) part of the report.
+
+```{r diag-strong-efficiency}
+# Strong-efficiency regression, coefficient by coefficient:
+#   error = b0 + b1 * forecast + b2 * pi_origin + b3 * brent_yy_origin
+# t-statistics with the same Newey-West s.e. (h-1 lags) as wald_hac().
+# |t| > 2: that variable, known at the origin, predicts our errors.
+strong_coefs <- evaluated %>%
+  group_by(h) %>%
+  group_modify(function(d, key) {
+    fit <- lm(error ~ model + pi_origin + brent_yy_origin, data = d)
+    se  <- sqrt(diag(sandwich::NeweyWest(fit, lag = key$h - 1,
+                                         prewhite = FALSE, adjust = TRUE)))
+    tibble(term = names(coef(fit)), estimate = coef(fit), t = coef(fit) / se)
+  }) %>%
+  ungroup()
+
+# Estimates
+strong_coefs %>%
+  select(h, term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate) %>%
+  mutate(across(-h, ~ round(.x, 3))) %>%
+  as.data.frame()
+
+# t-statistics
+strong_coefs %>%
+  select(h, term, t) %>%
+  pivot_wider(names_from = term, values_from = t) %>%
+  mutate(across(-h, ~ round(.x, 2))) %>%
+  as.data.frame()
+
+# Overlap between our forecast and current inflation, by horizon
+evaluated %>%
+  group_by(h) %>%
+  summarise(cor_model_pi = cor(model, pi_origin),
+            vif = 1 / (1 - summary(lm(model ~ pi_origin + brent_yy_origin))$r.squared)) %>%
+  mutate(across(-h, ~ round(.x, 2))) %>%
+  as.data.frame()
+
+# Same regression, reparametrised: the coefficient on (model - pi_origin)
+# measures whether the move our forecast predicts away from current inflation
+# actually happens (0 = fully, -1 = not at all)
+evaluated %>%
+  group_by(h) %>%
+  group_modify(function(d, key) {
+    fit <- lm(error ~ I(model - pi_origin) + pi_origin + brent_yy_origin, data = d)
+    se  <- sqrt(diag(sandwich::NeweyWest(fit, lag = key$h - 1,
+                                         prewhite = FALSE, adjust = TRUE)))
+    tibble(term = names(coef(fit)), estimate = coef(fit), t = coef(fit) / se)
+  }) %>%
+  ungroup() %>%
+  filter(term == "I(model - pi_origin)") %>%
+  mutate(across(c(estimate, t), ~ round(.x, 2))) %>%
+  as.data.frame()
+```
+
+```{r diag-cumulative-loss, fig.width = 9, fig.height = 4}
+# Cumulative squared-error difference, our model minus the AR(1), by target date.
+# Rising line: our model loses in that period. Falling: it wins.
+evaluated %>%
+  filter(h %in% c(1, 4, 8)) %>%
+  arrange(h, target) %>%
+  group_by(h) %>%
+  mutate(cum_loss = cumsum((actual - model)^2 - (actual - ar1)^2)) %>%
+  ungroup() %>%
+  ggplot(aes(target, cum_loss, colour = factor(h))) +
+  geom_line(linewidth = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  labs(title = "Cumulative squared-error difference: bottom-up model minus AR(1)",
+       colour = "h", x = NULL, y = "Cumulative SE(model) - SE(AR1)") +
+  theme_minimal(base_size = 11)
+```
+
+```{r diag-block-contributions}
+# Actual y-y inflation of each block
+act_blocks <- q %>%
+  transmute(target = date,
+            across(all_of(paste0("y_", block_names)), ~ .x - lag(.x, 4))) %>%
+  rename_with(~ sub("^y_", "act_", .x), -target)
+
+# Weighted error contribution of each block: w_b / sum(w) * (actual_b - forecast_b).
+# Approximate (ignores Q4 chain-linking), so the contributions sum to the
+# headline error only up to a few hundredths of a pp.
+contrib <- evaluated %>% left_join(act_blocks, by = "target")
+w_sum <- rowSums(contrib[paste0("w_", block_names)])
+for (b in block_names) {
+  contrib[[paste0("c_", b)]] <- contrib[[paste0("w_", b)]] / w_sum *
+    (contrib[[paste0("act_", b)]] - contrib[[paste0("fc_", b)]])
+}
+
+# Mean squared contribution by horizon, next to the total MSFE.
+# (The block terms don't add up to the total: covariances between blocks are missing.)
+contrib %>%
+  group_by(h) %>%
+  summarise(across(starts_with("c_"), ~ mean(.x^2)),
+            msfe_total = mean(error^2),
+            msfe_ar1   = mean((actual - ar1)^2)) %>%
+  mutate(across(-h, ~ round(.x, 3))) %>%
+  as.data.frame()
+
+# Same, but only for target dates outside the 2021-2023 surge
+contrib %>%
+  filter(!(target >= as.Date("2021-01-01") & target <= as.Date("2023-12-31"))) %>%
+  group_by(h) %>%
+  summarise(across(starts_with("c_"), ~ mean(.x^2)),
+            msfe_total = mean(error^2),
+            msfe_ar1   = mean((actual - ar1)^2)) %>%
+  mutate(across(-h, ~ round(.x, 3))) %>%
+  as.data.frame()
+```
+
+```{r diag-momentum}
+# Momentum check: on average, how far does each forecast move away from
+# current inflation (pi_origin), compared with how far inflation actually moved?
+# If the AR(1)'s moves are closer to the real ones at h = 2-5, especially for
+# targets from 2020 on, it was following momentum while our model reverted
+# to its drifts.
+evaluated %>%
+  mutate(period = if_else(target < as.Date("2020-01-01"), "before 2020", "2020 on")) %>%
+  group_by(period, h) %>%
+  summarise(move_model = mean(abs(model  - pi_origin)),
+            move_ar1   = mean(abs(ar1    - pi_origin)),
+            move_real  = mean(abs(actual - pi_origin)),
+            .groups = "drop") %>%
+  mutate(across(where(is.double), ~ round(.x, 2))) %>%
+  as.data.frame()
+```
+
+```{r diag-band-width}
+# Are the density bands as wide as our out-of-sample errors imply?
+# With unbiased, roughly normal errors, the 90% band should be about
+# +/- 1.645 * RMSE and the 68% band about +/- 1 * RMSE.
+read_csv(here("output", "forecast_headline.csv"), show_col_types = FALSE) %>%
+  mutate(h = row_number(),
+         half_90 = (q95 - q5) / 2,
+         half_68 = (q84 - q16) / 2) %>%
+  left_join(read_csv(here("output", "eval_absolute.csv"), show_col_types = FALSE) %>%
+              select(h, rmse), by = "h") %>%
+  transmute(h, date, half_90, implied_90 = 1.645 * rmse, ratio_90 = half_90 / implied_90,
+            half_68, rmse, ratio_68 = half_68 / rmse) %>%
+  mutate(across(where(is.double), ~ round(.x, 2))) %>%
+  as.data.frame()
+```

@@ -1,5 +1,7 @@
 % Swiss CPI inflation forecast -- technical report (working draft)
-% Status: draft for the meeting of 4 November 2026. Sections marked
+% Status: draft for the meeting of 18 November 2026. Models: X-13 seasonal
+% adjustment, plain ARIMA blocks, strong-franc dummy for imported goods.
+% All numbers come from output/ as produced by main.R. Sections marked
 % "To be completed" are placeholders for the final report.
 \documentclass[11pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
@@ -22,7 +24,7 @@
   \large A bottom-up approach with an error correction model for oil products}
 \author{Martin Sinishta \and Yanik Bittel \and Evan Weihs\\[0.3em]
   \small Economic Forecasting for Decision Making, HEC Lausanne -- Prof.\ Mathieu Grob\'ety}
-\date{Working draft, 4 November 2026}
+\date{Working draft, 18 November 2026}
 
 \begin{document}
 \maketitle
@@ -30,12 +32,15 @@
 \begin{abstract}
 \noindent We forecast Swiss year-on-year CPI inflation for 2026Q4--2029Q3 by splitting headline CPI
 into four blocks: oil products, rents, imported goods excluding oil and domestic goods and services
-excluding rents. Oil products follow an error correction model driven by Brent and the Swiss franc
-against the dollar; the other blocks follow univariate ARIMA models. Inflation is forecast at 0.9\%
-in 2026Q4, falling to about 0.45\% from mid-2027. A permanent 50\% rise in Brent adds about
-0.4 percentage points for one year. Over 55 recursive forecast origins since 2012, the forecasts are
-unbiased and beat a headline ARIMA and a random walk at horizons of two to three years, but they are
-not efficient: beyond one year they miss turning points.
+excluding rents. Each block is seasonally adjusted with X-13ARIMA-SEATS. Oil products follow an error
+correction model driven by Brent and the Swiss franc against the dollar; the other blocks follow
+ARIMA models with drift, with a dummy for the strong-franc period in imported goods. Inflation is
+forecast at 0.9\% in 2026Q4, falling to about 0.5\% in mid-2027 and settling at 0.65--0.7\% from
+2028. A permanent 50\% rise in Brent adds about 0.4 percentage points during 2027. Over 55 recursive
+forecast origins since 2012 the forecasts are unbiased and clearly beat the random walk and the
+sample mean, and are as accurate as an ARIMA on headline CPI. A simple AR(1) on headline inflation is
+more accurate at horizons of two to five quarters; this gap comes almost entirely from forecasts for
+2020--2026.
 \end{abstract}
 
 % ==========================================================================
@@ -62,23 +67,32 @@ products are imported and all rents domestic, and chain the links. Weights befor
 from the CPI identity by least squares; against the published 2016--2026 weights the error is at most
 0.04 pp.
 
+\textbf{Seasonal adjustment.} Oil products, imported and domestic goods have a significant seasonal
+pattern (for imported goods mostly from sales), rents do not. Each block is adjusted with
+X-13ARIMA-SEATS (log transform, automatic ARIMA model and outlier detection); X-13 finds no
+seasonality in rents, which are left unadjusted. X-13 detects level shifts in 2000Q4 (rents), 2011Q4
+(imported goods) and 2023Q1 (domestic goods). The models below are estimated on the adjusted series
+$y^{sa}_t = y_t - s_t$, where $s_t$ is the seasonal component; X-13 also forecasts $s_{T+h}$, which we
+add back to obtain forecasts of the unadjusted index. Brent and CHF/USD are not seasonal and are used
+as they are.
+
 \begin{table}[h]
   \centering\small
-  \caption{Blocks, 2026 basket weights and models}\label{tab:blocks}
+  \caption{Blocks, 2026 basket weights and models (on X-13 adjusted series)}\label{tab:blocks}
   \begin{tabular}{@{}llll@{}}
     \toprule
     Block & Weight & Model & Drivers \\
     \midrule
-    Domestic excl.\ rents & 59.0\% & ARIMA(0,1,0)(1,0,0)$_4$ with drift & -- \\
-    Imported excl.\ oil   & 20.1\% & ARIMA(2,1,1)(1,0,0)$_4$ with drift & -- \\
-    Rents                 & 18.9\% & ARIMA(1,1,1)(1,0,0)$_4$ with drift & -- \\
-    Oil products          &  2.1\% & Error correction model & Brent (USD), CHF/USD, trend \\
+    Domestic excl.\ rents & 59.0\% & ARIMA(1,1,1) with drift & -- \\
+    Imported excl.\ oil   & 20.1\% & ARIMA(0,1,2) with drift + 2009--16 dummy & -- \\
+    Rents                 & 18.9\% & ARIMA(3,1,0) with drift & -- \\
+    Oil products          &  2.1\% & Error correction model & Brent, CHF/USD, trend \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \textbf{Re-aggregation.} Rebuilding headline CPI from the four blocks, linked at Q4 with each year's
-weights, reproduces published y-y inflation within 0.14 pp (maximum, 2009) and 0.02 pp on average
+weights, reproduces published y-y inflation within 0.14 pp (maximum, 2009Q3) and 0.02 pp on average
 since 2000.
 \todo{To be completed: descriptive statistics and figure of the four blocks.}
 
@@ -86,95 +100,120 @@ since 2000.
 \section{Models and optimal forecasts}\label{sec:models}
 Under quadratic loss the optimal $h$-step forecast is the conditional expectation given the
 information at the origin $T = $ 2026Q3: future shocks are set to their expected value of zero and
-observed values are kept.
+observed values are kept. All models are estimated on the seasonally adjusted series; to simplify
+notation we drop the superscript $sa$ in this section.
 
 \subsection{Oil products: error correction model}
-The long-run relation, estimated by OLS (Engle--Granger first step), is
-\begin{equation}
-  oil_t = \underset{}{247.58} + \underset{(0.014)}{0.428}\, brent_t + \underset{(0.054)}{0.614}\, usd_t
-          + \underset{(0.027)}{0.415}\, t + ect_t ,
+Oil products, Brent and CHF/USD are all I(1): ADF statistics with constant and trend are $-3.13$,
+$-2.64$ and $-2.57$, against a 5\% critical value of $-3.43$. The long-run relation, estimated by OLS
+(Engle--Granger first step), is
+\begin{equation}\label{eq:lr}
+  oil_t = \underset{(6.66)}{249.59} + \underset{(0.014)}{0.424}\, brent_t + \underset{(0.055)}{0.602}\, usd_t
+          + \underset{(0.028)}{0.411}\, t + ect_t ,
 \end{equation}
-where $brent$ is $100\ln$ Brent in USD and $usd$ is $100\ln$ CHF per USD. A 10\% rise in Brent raises
-oil-product prices by about 4.3\% in the long run; the elasticity is below one because taxes and
+where $brent$ is $100\ln$ Brent in USD and $usd$ is $100\ln$ CHF per USD (the OLS standard errors are
+not valid with I(1) regressors and are shown for information only). A 10\% rise in Brent raises
+oil-product prices by about 4.2\% in the long run; the elasticity is below one because taxes and
 margins are fixed per litre. The short-run dynamics (one lag, chosen by BIC) are
-\begin{equation}
+\begin{equation}\label{eq:sr}
   \begin{split}
-  \Delta oil_t = {}& \underset{(0.27)}{0.398} \underset{(0.091)}{-\,0.394}\, ect_{t-1}
-    + \underset{(0.017)}{0.309}\,\Delta brent_t + \underset{(0.078)}{0.539}\,\Delta usd_t \\
-    &+ \underset{(0.077)}{0.017}\,\Delta oil_{t-1} + \underset{(0.037)}{0.095}\,\Delta brent_{t-1}
-    \underset{(0.090)}{-\,0.012}\,\Delta usd_{t-1} + \varepsilon_t .
+  \Delta oil_t = {}& \underset{(0.27)}{0.355} \underset{(0.086)}{-\,0.451}\, ect_{t-1}
+    + \underset{(0.017)}{0.299}\,\Delta brent_t + \underset{(0.078)}{0.491}\,\Delta usd_t \\
+    &+ \underset{(0.077)}{0.152}\,\Delta oil_{t-1} + \underset{(0.035)}{0.030}\,\Delta brent_{t-1}
+    \underset{(0.088)}{-\,0.042}\,\Delta usd_{t-1} + \varepsilon_t .
   \end{split}
 \end{equation}
-About 39\% of a gap to equilibrium closes each quarter. All three variables are I(1) (ADF with trend).
-Engle--Granger finds cointegration ($-5.30 < -4.10$ at 5\%); the Johansen trace test does not reject
-$r=0$ ($37.98 < 42.44$), but its first cointegrating vector ($0.44$, $0.67$, $0.44$) is close to the
-Engle--Granger estimates. Equal Brent and USD elasticities are rejected ($F = 16.7$, $p = 0.0001$).
+About 45\% of a gap to equilibrium closes each quarter. The model explains 83\% of quarterly
+oil-product inflation and the residuals show no autocorrelation (Ljung--Box $p = 0.45$).
+
+\textbf{Cointegration and exogeneity.} Both tests find one long-run relation: Engle--Granger rejects
+no cointegration ($-5.87 < -4.10$ at 5\%), and the Johansen trace test rejects $r = 0$
+($44.14 > 42.44$) but not $r \le 1$. The restriction that only oil products adjust to the long-run
+gap, i.e.\ that Brent and CHF/USD are weakly exogenous, is not rejected (LR $= 0.30$, $p = 0.86$), so a
+single-equation ECM is justified. Equal Brent and USD elasticities are rejected ($F = 15.1$,
+$p < 0.001$), so the two drivers are kept separate.
 
 \textbf{Optimal forecast.} The three equations are iterated forward for $h = 1,\dots,12$:
 \begin{align}
   \widehat{\Delta oil}_{T+h} &= c + \alpha\,\widehat{ect}_{T+h-1} + b_0\widehat{\Delta brent}_{T+h}
      + g_0\widehat{\Delta usd}_{T+h} \notag \\
      &\quad + a_1\widehat{\Delta oil}_{T+h-1}
-     + b_1\widehat{\Delta brent}_{T+h-1} + g_1\widehat{\Delta usd}_{T+h-1}, \\
-  \widehat{oil}_{T+h} &= \widehat{oil}_{T+h-1} + \widehat{\Delta oil}_{T+h}, \\
+     + b_1\widehat{\Delta brent}_{T+h-1} + g_1\widehat{\Delta usd}_{T+h-1}, \label{eq:ecmfc1}\\
+  \widehat{oil}_{T+h} &= \widehat{oil}_{T+h-1} + \widehat{\Delta oil}_{T+h}, \label{eq:ecmfc2}\\
   \widehat{ect}_{T+h} &= \widehat{oil}_{T+h} - \beta_0 - \beta_1\widehat{brent}_{T+h}
-     - \beta_2\widehat{usd}_{T+h} - \delta\,(T+h).
+     - \beta_2\widehat{usd}_{T+h} - \delta\,(T+h). \label{eq:ecmfc3}
 \end{align}
 Because Brent and CHF/USD enter contemporaneously, the forecast is conditional on their paths. We
 use random walks, so their future changes are zero. Oil inflation then converges to the trend
-$\delta = 0.415$ per quarter (about 1.7\% a year), with $ect$ settling at
-$(\delta(1-a_1)-c)/\alpha \approx -0.03$.
+$\delta = 0.411$ per quarter (about 1.6\% a year), with $ect$ settling at
+$(\delta(1-a_1)-c)/\alpha \approx 0.01$.
 
 \subsection{Rents, imported and domestic goods: ARIMA with drift}
 Each block follows
-\begin{equation}
-  \phi(L)\,\Phi(L^4)\,(\Delta y_t - \mu) = \theta(L)\,\varepsilon_t ,
+\begin{equation}\label{eq:arima}
+  \phi(L)\,(\Delta y_t - \mu - \lambda D_t) = \theta(L)\,\varepsilon_t ,
 \end{equation}
-with drift $\mu$, the mean q-q inflation rate.
+with drift $\mu$, the mean q-q inflation rate. $D_t$ is used for imported goods only: $D_t = 1$ in
+2009Q1--2016Q4 and 0 otherwise, so $\lambda$ shifts mean growth during the strong-franc period. It
+enters the estimation in levels as the cumulated dummy $\sum_{s\le t} D_s$, which after differencing is
+$D_t$. The orders were chosen by BIC over ARIMA$(p,1,q)$, $p \le 3$, $q \le 2$; no seasonal terms are
+needed after adjustment.
 
 \begin{table}[h]
   \centering\small
-  \caption{ARIMA estimates, 2000Q1--2026Q3 (standard errors in brackets)}\label{tab:arima}
+  \caption{ARIMA estimates on X-13 adjusted series, 2000Q1--2026Q3 (standard errors in brackets)}\label{tab:arima}
   \begin{tabular}{@{}lccc@{}}
     \toprule
     & Rents & Imported excl.\ oil & Domestic excl.\ rents \\
-    & (1,1,1)(1,0,0)$_4$ & (2,1,1)(1,0,0)$_4$ & (0,1,0)(1,0,0)$_4$ \\
+    & (3,1,0) & (0,1,2) & (1,1,1) \\
     \midrule
-    $\phi_1$   & 0.329 (0.138) & $-0.701$ (0.111) & \\
-    $\phi_2$   &               & 0.273 (0.105)    & \\
-    $\theta_1$ & 0.529 (0.140) & 0.736 (0.079)    & \\
-    $\Phi_1$   & 0.272 (0.101) & 0.514 (0.093)    & 0.725 (0.066) \\
-    $\mu$      & 0.357 (0.058) & $-0.140$ (0.167) & 0.149 (0.083) \\
+    $\phi_1$   & 0.847 (0.092) &                 & 0.826 (0.076) \\
+    $\phi_2$   & $-0.472$ (0.117) &              & \\
+    $\phi_3$   & 0.350 (0.097) &                 & \\
+    $\theta_1$ &               & 0.129 (0.087)   & $-0.446$ (0.113) \\
+    $\theta_2$ &               & 0.400 (0.098)   & \\
+    $\mu$      & 0.361 (0.067) & 0.026 (0.092)   & 0.147 (0.056) \\
+    $\lambda$ (2009--16 dummy) & & $-0.533$ (0.162) & \\
     \midrule
-    Ljung--Box $p$ (8 lags) & 0.74 & 0.64 & 0.11 \\
-    BIC        & $-21.0$ & 261.3 & 30.0 \\
+    Ljung--Box $p$ (8 lags) & 0.83 & 0.20 & 0.19 \\
+    BIC        & $-20.6$ & 188.5 & $-36.3$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\textbf{Optimal forecast.} Write $a(L) = \phi(L)\Phi(L^4) = 1 - \sum_{i=1}^{P} a_i L^i$ and
-$x_t = \Delta y_t - \mu$. Then
+Rents grow by 0.36\% a quarter (about 1.4\% a year); the three AR terms describe their slow,
+cyclical adjustment after reference-rate changes. In imported goods, growth was 0.53 pp a quarter
+lower during the strong-franc period ($t = -3.3$); outside it the drift is close to zero (0.03\%, not
+significant), and this is the growth used in the forecast. The dummy also improves the fit (BIC 188.5
+against 191.5 for the best model without it). Domestic goods grow by 0.15\% a quarter (about 0.6\% a
+year, $t = 2.6$). No block shows residual autocorrelation.
+
+\textbf{Optimal forecast.} Write $\phi(L) = 1 - \sum_{i=1}^{p} a_i L^i$, $\theta(L) = 1 +
+\sum_{j=1}^{q} m_j L^j$ and $x_t = \Delta y_t - \mu - \lambda D_t$. With $D_{T+h} = 0$,
 \begin{gather}
-  \hat x_{T+h} = \sum_{i=1}^{P} a_i\, \hat x_{T+h-i} + \theta_1 \hat\varepsilon_T\, \mathbb{1}[h=1], \\
-  \hat y_{T+h} = y_T + \sum_{j=1}^{h}\left(\mu + \hat x_{T+j}\right),
+  \hat x_{T+h} = \sum_{i=1}^{p} a_i\, \hat x_{T+h-i} + \sum_{j=h}^{q} m_j\, \hat\varepsilon_{T+h-j}, \label{eq:arimafc1}\\
+  \hat y^{sa}_{T+h} = y^{sa}_T + \sum_{k=1}^{h}\left(\mu + \hat x_{T+k}\right),
   \qquad
-  \hat\pi_{T+h} = \hat y_{T+h} - \hat y_{T+h-4},
+  \hat y_{T+h} = \hat y^{sa}_{T+h} + \hat s_{T+h},
+  \qquad
+  \hat\pi_{T+h} = \hat y_{T+h} - \hat y_{T+h-4}, \label{eq:arimafc2}
 \end{gather}
-where $\hat x_{T+h-i} = x_{T+h-i}$ for dates up to $T$. As $\hat x$ dies out, $\hat\pi$ converges to
-$4\mu$. With $\Delta y_t - \mu = \psi(L)\varepsilon_t$ and cumulated weights
-$\Psi_k = \sum_{i=0}^{k}\psi_i$ ($\Psi_k = 0$ for $k<0$), the y-y forecast error variance is
-\begin{equation}
+where $\hat x_{T+h-i} = x_{T+h-i}$ for dates up to $T$, the MA sum is empty for $h > q$, and
+$\hat s_{T+h}$ is the X-13 seasonal forecast. As $\hat x$ dies out, $\hat\pi$ converges to $4\mu$. With
+$x_t = \psi(L)\varepsilon_t$ and cumulated weights $\Psi_k = \sum_{i=0}^{k}\psi_i$ ($\Psi_k = 0$ for
+$k<0$), and treating the seasonal component as known, the y-y forecast error variance is
+\begin{equation}\label{eq:var}
   \operatorname{Var}(\pi_{T+h} - \hat\pi_{T+h}) = \sigma^2 \sum_{k=0}^{h-1}\left(\Psi_k - \Psi_{k-4}\right)^2 .
 \end{equation}
-Our coded recursion reproduces R's \texttt{predict()} to $10^{-13}$. In the imported model the AR
-inverse root $-0.98$ nearly cancels the MA root $-0.74$, a sign of over-parameterisation.
+Our coded recursion reproduces R's \texttt{predict()} to $10^{-13}$.
 
 \subsection{Aggregation and density}
 Block forecasts are converted to index levels and aggregated with the 2026 weights, linked at Q4:
 $P^{CPI}_t = P^{CPI}_{Q4,t-1}\sum_i w_i P^i_t / P^i_{Q4,t-1}$. The density forecast uses 5,000
 simulated paths; in each future quarter we draw one past quarter and take, from that quarter, the
 residuals of all four models and the changes in Brent and CHF/USD, which keeps their correlation.
-Parameter uncertainty is not included.
+The X-13 seasonal forecast is added to every path. Parameter uncertainty and uncertainty about the
+seasonal pattern are not included.
 
 % ==========================================================================
 \section{Forecast}\label{sec:forecast}
@@ -185,19 +224,29 @@ Parameter uncertainty is not included.
   \label{fig:fan}
 \end{figure}
 
-Headline inflation is forecast at 0.93\% in 2026Q4, a result of the 2026 oil spike (Brent rose from
-\$64 in 2025Q4 to \$103 in 2026Q2). As the spike drops out of the y-y rate and oil products return
-towards equilibrium, inflation falls to 0.22\% in 2027Q3 and then settles around 0.45\%
-(Figure~\ref{fig:fan}). In the long run, rents contribute $+0.27$ pp, domestic goods $+0.28$ pp,
-imported goods $-0.13$ pp and oil products $+0.03$ pp. A permanent 50\% rise in Brent from 2027Q1
-adds about 0.4 pp for four quarters; it raises the price level permanently but y-y inflation only
-for one year.
+Headline inflation is forecast at 0.88\% in 2026Q4 and 0.82\% in 2027Q1, a result of the 2026 oil
+spike (Brent rose from \$64 in 2025Q4 to \$103 in 2026Q2; oil products $+17.8$\% y-y in 2026Q4). As
+the spike drops out of the y-y rate, with Brent and CHF/USD held constant, inflation falls to 0.48\%
+in 2027Q3 and then settles at 0.65--0.7\% from 2028 (Figure~\ref{fig:fan}). In 2029Q3, domestic goods
+contribute $+0.36$ pp, rents $+0.28$ pp, oil products $+0.04$ pp and imported goods $+0.01$ pp: with
+the strong-franc dummy, imported goods stay close to zero inflation instead of extrapolating the
+2009--2016 decline.
+
+The 90\% band is 0.5--1.3\% one quarter ahead and about $-0.4$\% to 1.8\% from 2028. The probability
+that inflation stays in the SNB's 0--2\% range is about 0.8--0.85 from mid-2027; almost all of the
+remaining probability lies below zero (about 0.15) rather than above 2\% (below 0.03). These bands
+are too narrow (Section~\ref{sec:limits}).
+
+A permanent 50\% rise in Brent from 2027Q1 adds about 0.4 pp during 2027; it raises the price level
+permanently but y-y inflation only for one year. With a weight of 2\%, oil products have a limited
+effect on headline inflation even for a large shock.
 
 % ==========================================================================
 \section{Out-of-sample evaluation}\label{sec:evaluation}
-We produce recursive (expanding-window) forecasts from 55 origins, 2012Q4--2026Q2, for $h = 1,\dots,12$,
-re-estimating all models at each origin (Figure~\ref{fig:spaghetti}). Tests follow the lecture
-(Section 3.1), with Newey--West standard errors using $h-1$ lags.
+We produce recursive (expanding-window) forecasts from 55 origins, 2012Q4--2026Q2, for $h = 1,\dots,12$
+(Figure~\ref{fig:spaghetti}). At each origin X-13, the four block models and the benchmarks are re-run
+on the data available at that date. Tests follow the lecture (Section 3.1), with Newey--West standard
+errors using $h-1$ lags.
 
 \begin{figure}[h]
   \centering
@@ -213,13 +262,13 @@ re-estimating all models at each origin (Figure~\ref{fig:spaghetti}). Tests foll
     \toprule
     & $h=1$ & $h=4$ & $h=8$ & $h=12$ \\
     \midrule
-    Mean error (pp) & 0.02 & 0.04 & 0.08 & 0.25 \\
-    RMSE (pp) & 0.36 & 1.06 & 1.29 & 1.20 \\
-    Unbiasedness, $H_0: \tau = 0$ & 0.71 & 0.90 & 0.84 & 0.50 \\
-    Mincer--Zarnowitz, $H_0: \alpha = 0, \beta = 1$ & 0.65 & 0.36 & 0.006 & 0.000 \\
-    \quad $\hat\beta$ & 1.06 & 0.64 & $-0.54$ & $-0.53$ \\
-    Strong efficiency, $H_0: \beta = 0$ on $\Omega_t$ & 0.013 & 0.038 & 0.005 & 0.000 \\
-    Weak efficiency, errors at most MA($h-1$) & 0.015 & 0.001 & 0.001 & 0.24 \\
+    Mean error (pp) & $-0.01$ & $-0.12$ & $-0.09$ & 0.08 \\
+    RMSE (pp) & 0.35 & 1.09 & 1.24 & 1.16 \\
+    Unbiasedness, $H_0: \tau = 0$ & 0.78 & 0.66 & 0.82 & 0.82 \\
+    Mincer--Zarnowitz, $H_0: \alpha = 0, \beta = 1$ & 0.36 & 0.29 & 0.023 & 0.010 \\
+    \quad $\hat\beta$ & 1.08 & 0.60 & $-0.93$ & $-1.11$ \\
+    Strong efficiency, $H_0: \beta = 0$ on $\Omega_t$ & 0.014 & 0.000 & 0.075 & 0.000 \\
+    Weak efficiency, errors at most MA($h-1$) & 0.023 & 0.052 & 0.13 & 0.64 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -231,89 +280,114 @@ re-estimating all models at each origin (Figure~\ref{fig:spaghetti}). Tests foll
     \toprule
     Benchmark & $h=1$ & $h=4$ & $h=8$ & $h=12$ \\
     \midrule
-    ARIMA on headline CPI & 0.99 (0.97) & 1.04 (0.80) & 0.80 (0.04) & 0.75 (0.04) \\
-    Random walk on y-y inflation & 0.78 (0.29) & 0.84 (0.39) & 0.56 (0.02) & 0.46 (0.07) \\
-    Sample mean & 0.11 (0.00) & 0.85 (0.31) & 1.17 (0.35) & 1.11 (0.47) \\
+    AR(1) on headline inflation   & 0.93 (0.61) & 1.16 (0.02) & 1.09 (0.30) & 1.02 (0.85) \\
+    ARIMA(0,1,1) on headline CPI  & 0.87 (0.31) & 1.02 (0.83) & 1.09 (0.32) & 1.02 (0.82) \\
+    Random walk on y-y inflation  & 0.76 (0.21) & 0.89 (0.62) & 0.52 (0.07) & 0.43 (0.09) \\
+    Sample mean                   & 0.10 (0.00) & 0.90 (0.42) & 1.08 (0.35) & 1.03 (0.73) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The forecasts are unbiased at all horizons (Table~\ref{tab:absolute}). The bottom-up model beats the
-headline ARIMA by 20--25\% in MSFE at $h = 8$--12 and the random walk at all horizons
-(Table~\ref{tab:relative}), so the disaggregation adds value at medium horizons. Beyond one year,
-however, Mincer--Zarnowitz and both efficiency tests reject and the model does no better than the
-sample mean: it extrapolates the current situation and misses turning points, such as the 2022 surge
-and the 2024--25 decline. MAFE ratios give the same ranking.
-\todo{To be completed: density evaluation (coverage, PIT), error variance by horizon.}
+\textbf{Absolute standards} (Table~\ref{tab:absolute}). The forecasts are unbiased at every horizon
+(mean errors between $-0.13$ and $+0.08$ pp, $p > 0.65$). Mincer--Zarnowitz is not rejected up to five
+quarters ahead but is rejected from $h = 6$, with a negative slope at long horizons: there the
+forecasts are close to the long-run level and carry little information about the outcome. Strong
+efficiency is rejected at most horizons: information available at the origin, in particular current
+inflation and the recent change in Brent, could still improve the forecasts. Weak efficiency is
+rejected at $h = 1$ and $h = 5$--7. The error variance increases with the horizon up to about two
+years (from 0.13 to 1.54) and is roughly stable afterwards.
+
+\textbf{Relative standards} (Table~\ref{tab:relative}). The bottom-up model beats the random walk at
+every horizon, by up to 57\% in MSFE at $h = 12$ (significant at 10\% from $h = 6$), and the sample
+mean up to three quarters ahead. It is as accurate as the ARIMA on headline CPI (no difference is
+significant). The AR(1) on headline inflation is more accurate from two to five quarters ahead (MSFE
+ratios 1.12--1.22, significant at 5\% for $h = 3$--5); from six quarters on the difference is small and
+not significant. MAFE ratios give the same ranking.
+
+\textbf{Where the AR(1) gains.} Splitting the evaluation by target date, the two models are about
+equally accurate for targets before 2020 (MSFE ratios 0.96--1.06 at $h = 2$--5). For targets from 2020
+the ratio is 1.15--1.36, and at $h = 4$ about 90\% of the cumulated squared-error difference comes
+from these targets: the COVID shock, the 2021--2023 surge and its fall, and the drop to about 0\% in
+2025. After 2020 both models predict moves away from current inflation only about half to two-thirds
+as large as those observed, the AR(1) slightly larger ones than the bottom-up model. Because $h$-step errors overlap and the gap is concentrated in a few episodes, the
+Diebold--Mariano significance at $h = 3$--5 rests on few effective observations and should be read
+with care.
+\todo{To be completed: figure of the cumulative squared-error difference against the AR(1); block
+contributions to the errors; density evaluation (coverage, PIT).}
 
 % ==========================================================================
 \section{Limitations and next steps}\label{sec:limits}
 \begin{itemize}
-  \item \textbf{Seasonality.} The ARIMA models contain seasonal AR terms. Next: seasonality plots by
-        quarter, X-13 adjustment where seasonal, plain ARIMA.
-  \item \textbf{Persistence beyond one year.} Next: test deterministic against stochastic trends for
-        domestic goods (ADF with trend).
-  \item \textbf{Imported block.} The negative drift ($-0.14$, not significant) lowers headline
-        inflation by 0.13 pp over the whole horizon, and the AR and MA roots nearly cancel. Next: drop
-        the drift or add a 2009--2016 dummy; estimate ARIMA(1,1,0) or (0,1,1).
-  \item \textbf{Density bands.} The 90\% half-width at $h=8$ is 1.24 pp, against about 2.1 pp implied
-        by the out-of-sample RMSE. Next: check coverage and calibrate on out-of-sample errors.
-  \item \textbf{Outliers.} COVID and 2022: additive outliers where a residual exceeds three times the
-        interquartile range.
+  \item \textbf{Density bands.} The 90\% half-width at $h = 8$ is 1.10 pp, against about 2.0 pp implied
+        by the out-of-sample RMSE ($1.645 \times 1.24$). The bands ignore parameter and seasonal
+        uncertainty, so the probability of staying in the 0--2\% range is overstated. Next: check
+        coverage and calibrate the bands on the out-of-sample errors.
+  \item \textbf{Performance after shocks.} The bottom-up model reverts to the block drifts after
+        large shocks and loses to a headline AR(1) at two to five quarters for 2020--2026. Next:
+        decompose the errors by block and consider combining the bottom-up and AR(1) forecasts.
+  \item \textbf{Strong-franc dummy.} Its dates were chosen with hindsight, but the recursive
+        evaluation applies it from 2012, before the end of the period was known. The evaluation for
+        imported goods is therefore slightly favourable.
+  \item \textbf{Seasonal component.} The X-13 seasonal forecast is treated as known, both in the point
+        forecast and in the density.
 \end{itemize}
 
 % ==========================================================================
-\section*{Questions for the meeting of 4 November}
+\section*{Questions for the meeting of 18 November}
 \begin{enumerate}
-  \item Is X-13 seasonal adjustment followed by a plain ARIMA acceptable for the non-oil blocks?
-  \item Engle--Granger finds cointegration and Johansen does not: is Engle--Granger enough to keep the ECM?
-  \item Can we extrapolate the ECM's linear trend for 12 quarters, or should CO$_2$-levy dummies replace it?
-  \item Brent and CHF/USD: random walk plus a shock scenario, or the futures curve?
-  \item Imported block: drop the drift, add a 2009--2016 dummy, or start the sample later?
-  \item Are the least-squares weights before 2016 (maximum error 0.04 pp) acceptable?
+  \item Density bands: calibrate on out-of-sample errors, or add parameter uncertainty by bootstrap?
+  \item The AR(1) beats the bottom-up model at 2--5 quarters, driven by 2020--2026: report it with
+        this qualification, or also present a combination of the two forecasts?
+  \item Is the strong-franc dummy acceptable in the recursive evaluation, given that its dates are
+        known only ex post?
 \end{enumerate}
 
 % ==========================================================================
 \appendix
 \section{Code and reproducibility}\label{app:code}
 All results come from one R project. Running \texttt{source("main.R")} reproduces every table and
-figure in about 30 seconds. Parameters (sample start, horizon, model orders, first evaluation
-origin, number of simulations, scenario) are set once at the top of \texttt{main.R}. Raw data are
-downloaded through APIs (BFS, FRED, SNB), never edited by hand, and all paths are relative
+figure in about one minute. Parameters (sample start, horizon, model orders and dummy, first
+evaluation origin, number of simulations, scenario) are set once at the top of \texttt{main.R}. Raw
+data are downloaded through APIs (BFS, FRED, SNB), never edited by hand, and all paths are relative
 (\texttt{here()}).
 
+{\small
 \begin{verbatim}
 Forecasting/
-|-- main.R                     parameters + runs everything in order
-|-- R/functions.R              download helpers
-|-- R/models.R                 model, forecast, aggregation and test functions
-|-- Scripts/01_load_data.R     raw data from the APIs into RAW_DATA/
-|-- Scripts/02_dta_cleaning.qmd  cleaning, block indices, weights, quarterly data
-|-- Scripts/04_model_estimation.R  estimates, diagnostics, cointegration, checks
-|-- Scripts/05_forecasting.R   point and density forecast, scenario, fan chart
-|-- Scripts/06_evaluation.R    recursive forecasts, evaluation tables, charts
+|-- main.R                   parameters + runs everything in order
+|-- R/functions.R            download helpers
+|-- R/models.R               model, forecast, aggregation, test functions
+|-- Scripts/01_load_data.R   raw data from the APIs into RAW_DATA/
+|-- Scripts/02_dta_cleaning.qmd       block indices, weights, quarterly
+|-- Scripts/03_descriptive_analysis.qmd  seasonality, unit roots, BIC
+|-- Scripts/04_model_estimation.qmd   estimates, tests, checks
+|-- Scripts/05_forecasting.qmd        point, density, scenario
+|-- Scripts/06_evaluation.qmd         recursive forecasts, evaluation
 |-- DTA_CLEAN/  output/  figures/  report/
-\end{verbatim}
+\end{verbatim}}
 
-Estimation uses transparent functions only (\texttt{stats::arima} by maximum likelihood,
-\texttt{lm}, \texttt{urca}); no automatic model selection. The forecasts are coded by hand from the
-derivations in Section~\ref{sec:models}, so each equation has a matching function
-(Table~\ref{tab:functions}).
+The model orders are selected by BIC in \texttt{03\_descriptive\_analysis.qmd} and then fixed in
+\texttt{main.R}; apart from X-13's automatic model for the seasonal adjustment, estimation uses
+transparent functions only (\texttt{stats::arima} by maximum likelihood, \texttt{lm}, \texttt{urca}).
+The forecasts are coded by hand from the derivations in Section~\ref{sec:models}, so each equation has
+a matching function (Table~\ref{tab:functions}).
 
 \begin{table}[h]
   \centering\small
   \caption{Main functions in \texttt{R/models.R}}\label{tab:functions}
-  \begin{tabular}{@{}lp{0.52\textwidth}l@{}}
+  \begin{tabular}{@{}lp{0.47\textwidth}l@{}}
     \toprule
     Function & What it does & Implements \\
     \midrule
-    \texttt{fit\_arima()} & ARIMA$(p,1,q)(P,0,Q)_4$ with drift, by ML & eq.~(6) \\
-    \texttt{arima\_polys()} & Multiplies out $a(L)=\phi(L)\Phi(L^4)$ and the MA side & eq.~(7) \\
-    \texttt{arima\_paths()} & Iterates the ARIMA forward, back to log levels; zero shocks give the point forecast, drawn shocks give simulated paths & eq.~(7)--(8) \\
-    \texttt{fit\_ecm()} & Engle--Granger two steps: long-run OLS, then short-run OLS with $ect_{t-1}$ & eq.~(1)--(2) \\
-    \texttt{ecm\_paths()} & Iterates the three ECM equations forward, given driver paths & eq.~(3)--(5) \\
+    \texttt{x13\_adjust()} & X-13ARIMA-SEATS on one block: adjusted series and seasonal forecast & Section~\ref{sec:data} \\
+    \texttt{fit\_arima()} & ARIMA$(p,1,q)$ with drift and optional period dummy, by ML & eq.~(\ref{eq:arima}) \\
+    \texttt{arima\_polys()} & Extracts $a_i$, $m_j$, $\mu$ and $\lambda$ from a fitted model & eq.~(\ref{eq:arimafc1}) \\
+    \texttt{arima\_paths()} & Iterates the ARIMA forward, back to log levels; zero shocks give the point forecast, drawn shocks give simulated paths & eq.~(\ref{eq:arimafc1})--(\ref{eq:arimafc2}) \\
+    \texttt{fit\_ecm()} & Engle--Granger two steps: long-run OLS, then short-run OLS with $ect_{t-1}$ & eq.~(\ref{eq:lr})--(\ref{eq:sr}) \\
+    \texttt{ecm\_paths()} & Iterates the three ECM equations forward, given driver paths & eq.~(\ref{eq:ecmfc1})--(\ref{eq:ecmfc3}) \\
+    \texttt{fit\_blocks()} & X-13 on each block, then the ECM and the three ARIMAs on the adjusted series & -- \\
     \texttt{aggregate\_headline()} & Rebuilds headline y-y inflation from block levels, linked at Q4 & Section~3.3 \\
-    \texttt{forecast\_point()} & Fits all four blocks at one origin and returns the headline forecast & -- \\
+    \texttt{forecast\_point()} & Forecasts all four blocks at one origin, adds the seasonal component and returns the headline forecast & -- \\
     \texttt{wald\_hac()} & Wald test with Newey--West covariance ($h-1$ lags): MZ, unbiasedness, strong efficiency & Table~\ref{tab:absolute} \\
     \texttt{weak\_efficiency\_p()} & Ljung--Box on the residuals of an MA$(h-1)$ fitted to the errors & Table~\ref{tab:absolute} \\
     \texttt{dm\_test()} & Diebold--Mariano with the Harvey--Leybourne--Newbold correction & Table~\ref{tab:relative} \\
@@ -323,17 +397,18 @@ derivations in Section~\ref{sec:models}, so each equation has a matching functio
 
 Check of the derivation: with zero shocks, \texttt{arima\_paths()} returns the same forecasts as R's
 Kalman-filter \texttt{predict()}, with a maximum difference of $10^{-13}$ for all three blocks. The core
-of the recursion, steps 2 and 3 of eq.~(7)--(8):
+of the recursion, eq.~(\ref{eq:arimafc1})--(\ref{eq:arimafc2}):
 
 \begin{lstlisting}
+x_hist <- diff(y) - pl$mu - pl$delta * dummy      # x_t = dy_t - mu - lambda D_t
 for (j in 1:h) {
   t  <- n_x + j
-  ar <- colSums(pl$a * X[t - seq_len(P), , drop = FALSE])  # sum of a_i * x_{T+h-i}
-  ma <- colSums(pl$m * E[t - seq_len(Q), , drop = FALSE])  # MA terms: eps_T only at h = 1
-  X[t, ] <- ar + E[t, ] + ma                                # future shocks E = 0 (point)
+  ar <- if (P > 0) colSums(pl$a * X[t - seq_len(P), , drop = FALSE]) else 0
+  ma <- if (Q > 0) colSums(pl$m * E[t - seq_len(Q), , drop = FALSE]) else 0
+  X[t, ] <- ar + E[t, ] + ma                       # future shocks E = 0 (point)
 }
-dy <- X[n_x + 1:h, , drop = FALSE] + pl$mu                  # back to q-q inflation
-y[length(y)] + matrix(apply(dy, 2, cumsum), h, N)           # cumulate to log levels
+dy <- X[n_x + 1:h, , drop = FALSE] + pl$mu         # back to q-q inflation, D = 0
+y[length(y)] + matrix(apply(dy, 2, cumsum), h, N)  # cumulate to log levels
 \end{lstlisting}
 
 \end{document}
