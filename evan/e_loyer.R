@@ -146,3 +146,66 @@ pi_hist <- y_all[(n - 11):n] - y_all[(n - 15):(n - 4)]
 plot(c(q$date[(n - 11):n], fc_dates), c(pi_hist, pi_fc), type = "l", lwd = 2, ylim = c(-0.5, 3.5), xlab = "", ylab = "Inflation des loyers sur un an (%)")
 # Ajoute la zone de l'intervalle à 90 % en bleu transparent.
 polygon(c(fc_dates, rev(fc_dates)), c(low90, rev(up90)), col = rgb(0, 0, 1, 0.2), border = NA)
+
+
+
+
+
+# Densité gaussienne – blocs domestique et importé ----
+
+# Crée la fonction psi_arma : à partir des coefficients AR (ar), MA (ma) et du nombre d'horizons H, elle renvoie psi_0 à psi_(H-1).
+psi_arma <- function(ar, ma, H) {
+  # Liste de départ : des 0 « avant le début » (un par coefficient AR), puis psi_0 = 1, puis des cases à remplir.
+  psi <- c(rep(0, length(ar)), 1, rep(0, H - 1))
+  # Boucle du cours : psi_j = somme des AR × psi précédents + le coefficient MA numéro j (0 s'il n'existe pas).
+  for (j in 1:(H - 1)) psi[length(ar) + 1 + j] <- sum(ar * psi[length(ar) + 1 + j - seq_along(ar)]) + ifelse(j <= length(ma), ma[j], 0)
+  # Renvoie seulement psi_0 à psi_(H-1), sans les 0 de départ ; l'accolade ferme la fonction.
+  psi[length(ar) + 1:H] }
+
+##Crée aussi la fonction de variance de l'inflation annuelle (poids c = somme des 4 derniers psi, puis sigma² × somme cumulée des c²).
+var_yy <- function(psi, sigma2) sigma2 * cumsum(sapply(seq_along(psi), function(j) sum(psi[max(1, j - 3):j]))^2)
+# Test 1 : la nouvelle fonction redonne-t-elle les psi des loyers calculés tout à l'heure ? (réponse attendue : TRUE)
+all.equal(psi_arma(unname(phi), numeric(0), 12), unname(psi))
+# Test 2 : la fonction de variance redonne-t-elle var_pi des loyers ? (réponse attendue : TRUE)
+all.equal(var_yy(psi_arma(unname(phi), numeric(0), 12), fit_rent2$sigma2), var_pi)
+
+
+# Prévision du niveau désaisonnalisé du domestique sur 12 trimestres (boucle de l'équipe), puis on rajoute la saisonnalité prévue par X-13.
+yd_fc <- drop(arima_paths(fit_dom2, fits$adj$dom_xrent$sa, 12)) + fits$adj$dom_xrent$sf_fc
+# Colle l'historique réel (log x 100, saisonnalité comprise) et la prévision bout à bout.
+yd_all <- c(q$y_dom_xrent, yd_fc)
+# Inflation du domestique sur un an (%) pour h = 1 à 12 : niveau moins niveau 4 trimestres plus tôt.
+pid_fc <- yd_all[n + 1:12] - yd_all[n + 1:12 - 4]
+
+# Poids psi du domestique, avec la fonction psi_arma : un coefficient AR (ar1) et un coefficient MA (ma1).
+psi_d <- psi_arma(coef(fit_dom2)["ar1"], coef(fit_dom2)["ma1"], 12)
+# Variance de l'erreur sur l'inflation annuelle, avec la variance des chocs propre au domestique.
+var_d <- var_yy(psi_d, fit_dom2$sigma2)
+# Tableau : horizon, borne 5 %, prévision, borne 95 % (prévision ± 1,645 × écart-type), arrondis à 2 décimales.
+round(cbind(h = 1:12, low90 = pid_fc - qnorm(0.95) * sqrt(var_d), pid_fc, up90 = pid_fc + qnorm(0.95) * sqrt(var_d)), 2)
+
+
+###Prévision ponctuelle
+# Récupère les 2 coefficients MA du modèle importé (ma1, ma2).
+th_i <- coef(fit_imp2)[c("ma1", "ma2")]
+# Récupère les chocs estimés (résidus) du modèle importé, un par trimestre observé.
+e_i <- residuals(fit_imp2)
+# Croissance trimestrielle prévue (règle de la chaîne) : drift + effet MA des 2 derniers chocs pour h = 1, 2 ; drift seul ensuite.
+dyi_fc <- unname(coef(fit_imp2)["drift"] + c(th_i[1] * e_i[n] + th_i[2] * e_i[n - 1], th_i[2] * e_i[n], rep(0, 10)))
+# Niveau prévu = dernier niveau désaisonnalisé + croissances cumulées, puis on rajoute la saisonnalité prévue par X-13.
+yi_fc <- tail(fits$adj$imp_xoil$sa, 1) + cumsum(dyi_fc) + fits$adj$imp_xoil$sf_fc
+
+#verification
+# Contrôle : écart maximal entre notre prévision (sans saisonnalité) et celle de predict() ; on attend un nombre quasi nul (genre 1e-13).
+max(abs(yi_fc - fits$adj$imp_xoil$sf_fc - predict(fit_imp2, n.ahead = 12, newxreg = cbind(n + 1:12, sum(D_franc), sum(D_2011)))$pred))
+# Colle l'historique réel (log x 100) et la prévision bout à bout.
+yi_all <- c(q$y_imp_xoil, yi_fc)
+
+# Inflation de l'importé sur un an (%) pour h = 1 à 12.
+pii_fc <- yi_all[n + 1:12] - yi_all[n + 1:12 - 4]
+
+#densité 
+# Variance de l'erreur sur l'inflation annuelle : psi d'un MA(2) pur (aucun AR) et variance des chocs de l'importé.
+var_i <- var_yy(psi_arma(numeric(0), th_i, 12), fit_imp2$sigma2)
+# Tableau : horizon, borne 5 %, prévision, borne 95 %, arrondis à 2 décimales.
+round(cbind(h = 1:12, low90 = pii_fc - qnorm(0.95) * sqrt(var_i), pii_fc, up90 = pii_fc + qnorm(0.95) * sqrt(var_i)), 2)
