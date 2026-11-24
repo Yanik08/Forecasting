@@ -115,3 +115,34 @@ fit_imp2
 Box.test(res_imp2, lag = 8, type = "Ljung-Box", fitdf = 2)
 # Jarque-Bera sur les nouveaux résidus.
 tseries::jarque.bera.test(res_imp2)
+
+# Densité gaussienne – bloc loyers ----
+
+# Prévision du niveau des loyers (log x 100) sur 12 trimestres avec la boucle de l'équipe (chocs futurs = 0, comme dans le cours).
+y_fc <- drop(arima_paths(fit_rent2, adj_rent$sa, 12))
+# Met l'historique et la prévision bout à bout dans une seule série.
+y_all <- c(adj_rent$sa, y_fc)
+# Retient la position du dernier trimestre observé (2026Q3).
+n <- length(adj_rent$sa)
+# Inflation des loyers sur un an (%) : niveau du trimestre moins niveau 4 trimestres plus tôt, pour chaque horizon h = 1 à 12.
+pi_fc <- y_all[n + 1:12] - y_all[n + 1:12 - 4]
+
+##les poids
+# Poids d'un choc sur l'inflation annuelle : somme des 4 derniers psi (une inflation annuelle = 4 croissances trimestrielles).
+c_w <- sapply(1:12, function(j) sum(psi[max(1, j - 3):j]))
+# Variance de l'erreur de prévision pour h = 1 à 12 : sigma² × somme cumulée des poids au carré (formule du cours).
+var_pi <- fit_rent2$sigma2 * cumsum(c_w^2)
+# Borne basse de l'intervalle à 90 % : prévision − 1,645 × écart-type (1,645 = quantile 95 % d'une loi normale).
+low90 <- pi_fc - qnorm(0.95) * sqrt(var_pi)
+# Borne haute de l'intervalle à 90 % : prévision + 1,645 × écart-type.
+up90 <- pi_fc + qnorm(0.95) * sqrt(var_pi)
+
+##fanchart
+# Crée les dates des 12 trimestres prévus : on part du dernier trimestre observé et on avance d'un trimestre 12 fois.
+fc_dates <- seq(max(q$date), by = "quarter", length.out = 13)[-1]
+# Inflation des loyers observée sur un an pour les 12 derniers trimestres (niveau moins niveau 4 trimestres plus tôt).
+pi_hist <- y_all[(n - 11):n] - y_all[(n - 15):(n - 4)]
+# Trace l'historique puis la prévision en une seule ligne ; ylim fixe l'échelle verticale, ylab le titre de l'axe.
+plot(c(q$date[(n - 11):n], fc_dates), c(pi_hist, pi_fc), type = "l", lwd = 2, ylim = c(-0.5, 3.5), xlab = "", ylab = "Inflation des loyers sur un an (%)")
+# Ajoute la zone de l'intervalle à 90 % en bleu transparent.
+polygon(c(fc_dates, rev(fc_dates)), c(low90, rev(up90)), col = rgb(0, 0, 1, 0.2), border = NA)
