@@ -209,3 +209,116 @@ pii_fc <- yi_all[n + 1:12] - yi_all[n + 1:12 - 4]
 var_i <- var_yy(psi_arma(numeric(0), th_i, 12), fit_imp2$sigma2)
 # Tableau : horizon, borne 5 %, prévision, borne 95 %, arrondis à 2 décimales.
 round(cbind(h = 1:12, low90 = pii_fc - qnorm(0.95) * sqrt(var_i), pii_fc, up90 = pii_fc + qnorm(0.95) * sqrt(var_i)), 2)
+
+##figure 
+# Crée la fonction "fan" : à partir de la série complète (y_all), de la prévision (pi), de la variance (v) et d'un titre, elle dessine un fan chart.
+fan <- function(y_all, pi, v, titre) {
+  # Inflation observée sur un an pour les 12 derniers trimestres (niveau moins niveau 4 trimestres plus tôt).
+  pi_hist <- y_all[(n - 11):n] - y_all[(n - 15):(n - 4)]
+  # Trace historique + prévision ; ylim = range(...) ajuste l'échelle verticale pour que tout soit visible, main = titre du graphique.
+  plot(c(q$date[(n - 11):n], fc_dates), c(pi_hist, pi), type = "l", lwd = 2, ylim = range(c(pi_hist, pi - 1.645 * sqrt(v), pi + 1.645 * sqrt(v))), main = titre, xlab = "", ylab = "Inflation sur un an (%)")
+  # Ajoute la zone de l'intervalle à 90 % (bleu transparent) puis la ligne pointillée qui sépare historique et prévision.
+  polygon(c(fc_dates, rev(fc_dates)), c(pi - qnorm(0.95) * sqrt(v), rev(pi + qnorm(0.95) * sqrt(v))), col = rgb(0, 0, 1, 0.2), border = NA); abline(v = max(q$date), lty = 2) }
+# Découpe la fenêtre Plots en 1 ligne et 3 colonnes, pour voir les 3 graphiques côte à côte.
+par(mfrow = c(1, 3))
+# Fan chart des loyers.
+fan(y_all, pi_fc, var_pi, "Loyers")
+# Fan chart du domestique hors loyers.
+fan(yd_all, pid_fc, var_d, "Domestique hors loyers")
+# Fan chart de l'importé hors pétrole.
+fan(yi_all, pii_fc, var_i, "Importé hors pétrole")
+
+# Densité gaussienne – bloc pétrole (ECM) ----
+# Chocs du pétrole : les résidus de l'équation de court terme de l'ECM (un par trimestre utilisé dans l'estimation).
+e_oil <- residuals(fits$ecm$sr)
+# Tableau des 3 chocs sur les mêmes trimestres : résidus ECM, variations trimestrielles du Brent et du taux CHF/USD (log x 100).
+chocs <- cbind(oil = e_oil, brent = tail(diff(q$y_brent), length(e_oil)), usd = tail(diff(q$y_usd), length(e_oil)))
+# Matrice de corrélation des 3 chocs, arrondie (1 sur la diagonale ; hors diagonale, le lien entre deux chocs, entre −1 et 1).
+round(cor(chocs), 2)
+# Jarque-Bera sur les chocs du Brent et du taux de change : H0 = normalité (on veut p > 0,05).
+apply(chocs[, c("brent", "usd")], 2, function(x) tseries::jarque.bera.test(x)$p.value)
+
+# Fixe la « graine » du hasard : les tirages seront identiques à chaque exécution (résultats reproductibles).
+set.seed(2026)
+# Tire les chocs : 12 trimestres × 5000 futurs, chacun tiré dans une loi normale de moyenne 0 et d'écart-type sigma (celui des loyers).
+chocs_r <- matrix(rnorm(12 * 5000, 0, sqrt(fit_rent2$sigma2)), 12, 5000)
+# Pour chaque futur, calcule le niveau des loyers avec la boucle de l'équipe, et le colle sous l'historique (une colonne par futur).
+y_sim <- rbind(matrix(adj_rent$sa, n, 5000), arima_paths(fit_rent2, adj_rent$sa, 12, shocks = chocs_r))
+# Inflation sur un an pour chaque horizon (ligne) et chaque futur (colonne).
+pi_sim <- y_sim[n + 1:12, ] - y_sim[n + 1:12 - 4, ]
+##comparer simulation et formule
+# Pour chaque horizon : bornes 5 % et 95 % des 5000 futurs simulés, à côté des bornes calculées par la formule.
+round(cbind(h = 1:12, sim_5 = apply(pi_sim, 1, quantile, 0.05), formule_5 = low90, sim_95 = apply(pi_sim, 1, quantile, 0.95), formule_95 = up90), 2)
+# Histogramme des 5000 inflations simulées à l'horizon 12 (2029Q3) : on doit voir une cloche.
+hist(pi_sim[12, ], breaks = 50, main = "Loyers 2029Q3 : 5000 futurs simulés", xlab = "Inflation sur un an (%)")
+
+##les chocs du Brent dans le temps
+# Tableau date + choc du Brent standardisé (écart à la moyenne / écart-type), sur les mêmes trimestres que "chocs".
+z_br <- tibble(date = tail(q$date, length(e_oil)), z = (chocs[, "brent"] - mean(chocs[, "brent"])) / sd(chocs[, "brent"]))
+# Découpe la fenêtre Plots en 1 ligne et 2 colonnes, pour mettre 2 graphiques côte à côte.
+par(mfrow = c(1, 2))
+# Graphique 1 : chaque choc trimestriel du Brent comme une barre verticale (type = "h"), dans le temps.
+plot(z_br$date, z_br$z, type = "h", lwd = 2, xlab = "", ylab = "Choc du Brent (écarts-types)", main = "Chocs du Brent dans le temps")
+# Lignes pointillées rouges à +3 et −3 écarts-types : au-delà, c'est presque impossible sous une loi normale.
+abline(h = c(-3, 3), lty = 2, col = "red")
+
+##comparer avec une vraie cloche
+# Graphique 2 : histogramme des chocs du Brent, en densité (freq = FALSE) pour pouvoir le comparer à une courbe.
+hist(z_br$z, freq = FALSE, breaks = 30, main = "Brent : chocs vs loi normale", xlab = "Choc (écarts-types)")
+# Superpose en rouge la cloche d'une loi normale parfaite (moyenne 0, écart-type 1).
+curve(dnorm(x), add = TRUE, col = "red", lwd = 2)
+
+##tester la correction et mesurer son coût
+# Repère les deux krachs du Brent : TRUE pour 2008Q4 et 2020Q2, FALSE pour tous les autres trimestres.
+krach <- z_br$date %in% as.Date(c("2008-10-01", "2020-04-01"))
+# Jarque-Bera sur les chocs du Brent sans ces deux trimestres (le "!" veut dire "sauf") : la normalité tient-elle ?
+tseries::jarque.bera.test(chocs[!krach, "brent"])$p.value
+# Écart-type des chocs du Brent avec et sans les krachs (en points de % par trimestre) : combien l'incertitude baisse-t-elle ?
+
+##tirer 5 000 scénarios de chocs corrélés
+# Matrice de covariance Sigma des 3 chocs (pétrole, Brent, CHF/USD), calculée sans les deux krachs du Brent.
+Sigma <- cov(chocs[!krach, ])
+# Fixe la graine du hasard, pour des résultats reproductibles.
+set.seed(2026)
+# Nombre de futurs simulés.
+N <- 5000
+# Tire 12 x N trios de chocs normaux indépendants, puis les « mélange » avec chol(Sigma) pour leur donner les bonnes variances et corrélations.
+Z <- matrix(rnorm(12 * N * 3), 12 * N, 3) %*% chol(Sigma)
+
+##les trajectoires des 5 000 futurs
+# Trajectoires du Brent (log x 100) : dernier niveau observé + somme cumulée des chocs, futur par futur (marche aléatoire).
+brent_sim <- tail(q$y_brent, 1) + apply(matrix(Z[, 2], 12, N), 2, cumsum)
+# Même chose pour le taux de change CHF/USD.
+usd_sim <- tail(q$y_usd, 1) + apply(matrix(Z[, 3], 12, N), 2, cumsum)
+# Trajectoires du niveau désaisonnalisé du pétrole avec la fonction ECM de l'équipe (chocs pétrole = colonne 1 de Z), puis on rajoute la saisonnalité X-13.
+oil_sim <- ecm_paths(fits$ecm, 12, brent_sim, usd_sim, shocks = matrix(Z[, 1], 12, N)) + fits$adj$oil$sf_fc
+# Vérifie la taille du résultat : on attend 12 lignes (horizons) et 5000 colonnes (futurs).
+dim(oil_sim)
+
+#l’inflation du pétrole et ses bornes
+# Historique réel du pétrole (log x 100, avec saisonnalité), répété pour chaque futur, avec les 12 trimestres simulés en dessous.
+oil_all <- rbind(matrix(q$y_oil, n, N), oil_sim)
+# Inflation sur un an du pétrole pour chaque horizon (ligne) et chaque futur (colonne).
+pio_sim <- oil_all[n + 1:12, ] - oil_all[n + 1:12 - 4, ]
+# Prévision ponctuelle (chocs nuls, Brent et CHF/USD gelés à leur dernier niveau, comme dans le code de l'équipe), avec l'historique devant.
+oil_pt <- c(q$y_oil, drop(ecm_paths(fits$ecm, 12, random_walk(q$y_brent, 12), random_walk(q$y_usd, 12))) + fits$adj$oil$sf_fc)
+# Tableau par horizon : borne 5 %, médiane des 5000 futurs, prévision ponctuelle, borne 95 %.
+round(cbind(h = 1:12, q5 = apply(pio_sim, 1, quantile, 0.05), mediane = apply(pio_sim, 1, median), point = oil_pt[n + 1:12] - oil_pt[n + 1:12 - 4], q95 = apply(pio_sim, 1, quantile, 0.95)), 2)
+
+##graphe
+# Borne basse (5 %) de l'inflation du pétrole pour chaque horizon, lue dans les 5000 futurs simulés.
+o_low <- apply(pio_sim, 1, quantile, 0.05)
+# Borne haute (95 %) pour chaque horizon.
+o_up <- apply(pio_sim, 1, quantile, 0.95)
+# Inflation sur un an du pétrole : prévision ponctuelle (h = 1 à 12) et historique des 12 derniers trimestres.
+o_pt <- oil_pt[n + 1:12] - oil_pt[n + 1:12 - 4]
+o_hist <- oil_pt[(n - 11):n] - oil_pt[(n - 15):(n - 4)]
+
+# Trace historique + prévision ponctuelle du pétrole ; l'échelle verticale couvre aussi les bornes simulées.
+plot(c(q$date[(n - 11):n], fc_dates), c(o_hist, o_pt), type = "l", lwd = 2, ylim = range(c(o_hist, o_low, o_up)), main = "Produits pétroliers", xlab = "", ylab = "Inflation sur un an (%)")
+# Zone de l'intervalle à 90 % (bornes 5 % et 95 % des 5000 futurs), en bleu transparent.
+polygon(c(fc_dates, rev(fc_dates)), c(o_low, rev(o_up)), col = rgb(0, 0, 1, 0.2), border = NA)
+# Ligne pointillée qui sépare historique et prévision.
+abline(v = max(q$date), lty = 2)
+# Remet la fenêtre Plots en mode « un seul graphique » pour la suite.
+par(mfrow = c(1, 1))
