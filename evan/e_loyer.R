@@ -322,3 +322,46 @@ polygon(c(fc_dates, rev(fc_dates)), c(o_low, rev(o_up)), col = rgb(0, 0, 1, 0.2)
 abline(v = max(q$date), lty = 2)
 # Remet la fenêtre Plots en mode « un seul graphique » pour la suite.
 par(mfrow = c(1, 1))
+
+# Densité gaussienne – inflation totale (4 blocs) ----
+##chocs et leurs corrélations
+# Tableau des 6 chocs sur les mêmes trimestres : résidus des 3 blocs ARIMA corrigés + les 3 chocs du pétrole (ECM, Brent, CHF/USD).
+chocs6 <- cbind(rent = tail(as.numeric(residuals(fit_rent2)), length(e_oil)), imp = tail(as.numeric(residuals(fit_imp2)), length(e_oil)), dom = tail(as.numeric(residuals(fit_dom2)), length(e_oil)), chocs)
+# Corrélations entre les 6 chocs, sans les deux krachs du Brent : les blocs sont-ils liés entre eux ?
+round(cor(chocs6[!krach, ]), 2)
+
+##tirer 5 000 futurs de 6 chocs corrélés
+# Matrice de covariance des 6 chocs (sans les krachs du Brent).
+Sigma6 <- cov(chocs6[!krach, ])
+# Graine du hasard, pour des résultats reproductibles.
+set.seed(2026)
+# Tire 12 x N groupes de 6 chocs normaux corrélés (colonnes : loyers, importé, domestique, pétrole, Brent, CHF/USD).
+Z6 <- matrix(rnorm(12 * N * 6), 12 * N, 6) %*% chol(Sigma6)
+
+##trajectoires des loyers, du domestique et préparation de l’importé
+# Loyers : 5000 trajectoires du niveau (log x 100) avec la boucle de l'équipe et les chocs de la colonne 1.
+rent6 <- arima_paths(fit_rent2, adj_rent$sa, 12, shocks = matrix(Z6[, 1], 12, N)) + adj_rent$sf_fc
+# Domestique : même chose avec les chocs de la colonne 3, puis on rajoute la saisonnalité X-13.
+dom6 <- arima_paths(fit_dom2, fits$adj$dom_xrent$sa, 12, shocks = matrix(Z6[, 3], 12, N)) + fits$adj$dom_xrent$sf_fc
+# Importé : les 2 derniers chocs observés, au-dessus des 12 chocs futurs tirés (colonne 2), pour chaque futur.
+E_i <- rbind(matrix(e_i[n - 1], 1, N), matrix(e_i[n], 1, N), matrix(Z6[, 2], 12, N))
+# Importé : croissance = drift + choc du trimestre + ma1 × choc d'avant + ma2 × choc d'il y a 2 trimestres (le MA(2) écrit à la main).
+dyi6 <- coef(fit_imp2)["drift"] + E_i[3:14, ] + th_i[1] * E_i[2:13, ] + th_i[2] * E_i[1:12, ]
+
+##trajectoires de l’importé et du pétrole
+
+# Importé : niveau = dernier niveau désaisonnalisé + croissances cumulées, puis on rajoute la saisonnalité X-13.
+imp6 <- tail(fits$adj$imp_xoil$sa, 1) + apply(dyi6, 2, cumsum) + fits$adj$imp_xoil$sf_fc
+# Brent et CHF/USD en marche aléatoire, avec les chocs des colonnes 5 et 6.
+br6 <- tail(q$y_brent, 1) + apply(matrix(Z6[, 5], 12, N), 2, cumsum)
+us6 <- tail(q$y_usd, 1) + apply(matrix(Z6[, 6], 12, N), 2, cumsum)
+# Pétrole : l'ECM de l'équipe avec ces trajectoires et les chocs de la colonne 4, puis la saisonnalité X-13.
+oil6 <- ecm_paths(fits$ecm, 12, br6, us6, shocks = matrix(Z6[, 4], 12, N)) + fits$adj$oil$sf_fc
+
+##l’inflation totale, avant et après
+# Agrège les 4 blocs en inflation totale sur un an, futur par futur, avec la fonction de l'équipe et les poids du panier.
+pi_head <- aggregate_headline(q, fc_dates, list(oil = oil6, rent = rent6, imp_xoil = imp6, dom_xrent = dom6), latest_weights(q))
+# Charge les résultats bootstrap de l'équipe : c'est l'« avant ».
+boot <- read.csv(here("output", "forecast_headline.csv"))
+# Tableau avant / après : bornes 5 %, médiane et 95 % gaussiennes (g), puis celles du bootstrap de l'équipe (b).
+round(cbind(h = 1:12, g5 = apply(pi_head, 1, quantile, 0.05), g50 = apply(pi_head, 1, median), g95 = apply(pi_head, 1, quantile, 0.95), b5 = boot$q5, b50 = boot$q50, b95 = boot$q95), 2)
