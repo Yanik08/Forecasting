@@ -192,5 +192,22 @@ reference_rate <- read_excel(raw(f_bwo), col_types = "text") |>
   arrange(valid_from)
 
 
+# 10. Variable mortgage rate ------------------------------------------------
+# SNB data portal, cube zikrepro (published interest rates for new business),
+# variable mortgages (MV), mean over banks (M), monthly, in %, since 1980.
+# https://data.snb.ch/en/topics/ziredev/cube/zikrepro
+# Before September 2008, rent adjustments were legally tied to the variable
+# mortgage rate of the leading local bank; the reference rate (section 9)
+# replaced it. We use this series to extend the reference rate before 2008.
+f_mortgage <- "snb_variable_mortgage_zikrepro.csv"
+if (needs_download(f_mortgage)) {
+  download_raw(snb_url("zikrepro", from = "1980-01", dim_sel = "D0(M),D1(MV)"),
+               raw(f_mortgage), "SNB zikrepro")
+}
+
+variable_mortgage <- read_snb(raw(f_mortgage)) |>
+  transmute(date = ym(Date), variable_mortgage_rate = Value)
+
+
 message("01_load_data.R done: cpi_index, cpi_weights, gdp, fx, policy_rates, brent, ",
-        "hicp_ea, unemployed, reference_rate")
+        "hicp_ea, unemployed, reference_rate, variable_mortgage")

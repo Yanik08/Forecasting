@@ -1,0 +1,12 @@
+equation,term,estimate
+long run,(Intercept),249.5865304687518
+long run,brent,0.42380063985496497
+long run,usd,0.6020088084989542
+long run,trend,0.4110606008828089
+short run,(Intercept),0.3549786262945954
+short run,ect_l1,-0.4506715826255026
+short run,d_brent,0.2986310315305839
+short run,d_usd,0.4909971638960038
+short run,d_oil_l1,0.15225217551069611
+short run,d_brent_l1,0.029775132871650675
+short run,d_usd_l1,-0.04244411309261793

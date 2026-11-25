@@ -1,0 +1,752 @@
+---
+   title: "Descriptive analysis and model selection (jumeau)"
+   format:
+     html:
+       embed-resources: true
+   editor: visual
+---
+
+# Descriptive analysis and model selection (jumeau)
+
+**Jumeau version** of `03_descriptive_analysis.qmd`, used to test external drivers in the block models. It is identical to the original except in section 5, where the rents and domestic goods models can include an external driver (built in `02_dta_cleaning_jumeau.qmd`), and in section 8, which evaluates the selected models. Drivers tested so far: **mortgage rate → rents**, **SNB policy rate → domestic goods excl. rents**.
+
+This file follows `02_dta_cleaning.qmd`. We read the quarterly data built there and use it for descriptive analysis and model selection only; no data is built or modified here.
+
+The steps are:
+
+1.  **Overview** and **descriptive statistics** of headline CPI and the four blocks.
+2.  **Seasonality**: we test it, then remove it with X-13ARIMA-SEATS. All models are estimated on the seasonally adjusted series.
+3.  **Stationarity** of the adjusted series and of the oil drivers.
+4.  **Model selection**: an ARIMA for rents, imported goods excl. oil and domestic goods excl. rents; an error-correction model (ECM) for oil products, with Brent and the USD exchange rate.
+5.  **Diagnostic tests** on the residuals of the chosen models.
+6.  **Forecast evaluation**: pseudo out-of-sample forecasts, with the seasonality added back, compared with an AR(1) benchmark.
+
+**DELETE BEFORE RENDERING PROJECT!!!!!!! In-sample and out-of-sample.** Two kinds of results appear in the project, depending on which data the parameters are estimated with:
+
+- **In-sample**: the parameters are estimated once on the full sample (2000Q1–2026Q3) and the model is assessed on the same data. The one-step in-sample errors are the residuals. They show how well a model fits, but are too optimistic as a measure of forecast accuracy, since the parameters have already seen the data.
+- **Out-of-sample**: at each origin t, the model is re-estimated on data up to t only (expanding window) and its forecast is compared with the realised value. This repeats what a forecaster could have done in real time.
+
+| Where | Type | What |
+|----|----|----|
+| 03, sections 3.2 and 4–7 | in-sample | seasonal adjustment, unit roots, model selection (BIC), residual diagnostics |
+| 03, section 8 | out-of-sample | each block vs AR(1), 1 and 4 quarters ahead |
+| `04_model_estimation.qmd` | in-sample | final estimates and tests on the full sample |
+| `05_forecasting.qmd` | forecast | forecast of 2026Q4–2029Q3 with the parameters estimated on the full sample |
+| `06_evaluation.qmd` | out-of-sample | headline inflation vs benchmarks, 1 to 12 quarters ahead |
+
+```{r setup}
+library(here)
+library(tidyverse)
+library(seasonal)   # seas(): X-13ARIMA-SEATS seasonal adjustment
+library(urca)       # ur.df() (ADF), ur.kpss() (KPSS), ca.jo() (Johansen)
+library(forecast)   # Arima(), forecast(), dm.test()
+library(tseries)    # jarque.bera.test()
+library(lmtest)     # grangertest()
+
+clean_dir <- here("DTA_CLEAN")
+
+# Quarterly data built in 02: headline CPI, the 4 blocks and the oil drivers
+quarterly <- read_csv(file.path(clean_dir, "quarterly_data.csv"), show_col_types = FALSE)
+
+# Logs x 100 of every series: a first difference is then (approximately)
+# the quarterly change in %
+quarterly <- quarterly %>%
+  mutate(across(-date, ~ 100 * log(.x), .names = "l_{.col}"))
+
+# External drivers (jumeau), built in 02_dta_cleaning_jumeau.qmd, with their
+# lagged levels (x_l1, ..., x_l4) computed on the full series, so that the
+# first quarters of the sample also have their lags
+drivers <- read_csv(file.path(clean_dir, "drivers_jumeau.csv"), show_col_types = FALSE) %>%
+  arrange(date)
+for (v in setdiff(names(drivers), "date")) {
+  for (k in 1:4) drivers[[paste0(v, "_l", k)]] <- lag(drivers[[v]], k)
+}
+quarterly <- quarterly %>% left_join(drivers, by = "date")
+
+# Check: period covered, number of quarters, columns
+range(quarterly$date)
+nrow(quarterly)
+names(quarterly)
+```
+
+# 1. Overview of the series
+
+```{r}
+# Readable names for the 5 series (headline + 4 blocks)
+series_names <- c(l_cpi_total     = "Headline CPI",
+                 l_cpi_oil       = "Oil products",
+                 l_cpi_rent      = "Rents",
+                 l_cpi_imp_xoil  = "Imported excl. oil",
+                 l_cpi_dom_xrent = "Domestic excl. rents")
+
+# Long format (one row per quarter and series), with the quarterly change
+# (q-o-q) and the change over 4 quarters (y-o-y), both in %
+inflation <- quarterly %>%
+  select(date, all_of(names(series_names))) %>%
+  pivot_longer(-date, names_to = "series", values_to = "log_index") %>%
+  group_by(series) %>%
+  mutate(qoq = log_index - lag(log_index),
+         yoy = log_index - lag(log_index, 4)) %>%
+  ungroup() %>%
+  mutate(series = factor(series_names[series], levels = series_names))
+
+# Levels: trends and breaks
+ggplot(inflation, aes(date, log_index)) +
+  geom_line() +
+  facet_wrap(~ series, scales = "free_y", ncol = 2) +
+  labs(title = "CPI blocks, 100 x log(index)", x = NULL, y = NULL)
+
+# Year-on-year inflation: the deflation episodes and the 2022 surge
+ggplot(filter(inflation, !is.na(yoy)), aes(date, yoy)) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  geom_line() +
+  facet_wrap(~ series, scales = "free_y", ncol = 2) +
+  labs(title = "Year-on-year inflation, in %", x = NULL, y = NULL)
+```
+
+1.  Two regimes. All blocks show high inflation from 1989 to 1993 (rents up to 10 %, headline about 6 %), and inflation remains below 3 % afterwards. Since the early 1990s differ clearly from the rest of the sample, we start the estimation sample in 2000.
+
+2.  Deflation period. It is strongest in imported excl. oil: the level falls by about 12 % between 2011 and 2016 and y/y inflation reaches −5 % in 2012, reflecting the strong franc. Headline and domestic excl. rents are also slightly negative over 2012–2016 and in 2020.
+
+3.  Seasonality in imported excl. oil between 2000 and about 2015, visible as a zig-zag in the level. It comes mainly from clothing and shoes, whose prices fall during the January and July sales. Sale prices are only recorded by the BFS since 2000, and the pattern weakens after about 2015. The seasonal pattern therefore changes over the sample, which we take into account in section 3.
+
+4.  Rents rise smoothly, with no breaks and no seasonality. Growth is almost constant after 1995 and slower in 2010–2020.
+
+5.  Oil products are very volatile, between −40 % and +35 % y/y, with falls in 2009, 2015 and 2020 and peaks in 2000, 2008 and 2022. For this reason we model this block separately, with Brent and the USD exchange rate as drivers.
+
+6.  The 2021–2023 inflation episode is a common shock visible in every block, followed by a return to about 0–1.5 %.
+
+# 2. Descriptive statistics
+
+```{r}
+# Sub-periods seen in the plots
+inflation <- inflation %>%
+  mutate(period = case_when(year(date) <= 1993 ~ "1988-1993 high inflation",
+                            year(date) <= 2008 ~ "1994-2008 low inflation",
+                            year(date) <= 2016 ~ "2009-2016 strong franc",
+                            year(date) <= 2020 ~ "2017-2020",
+                            TRUE               ~ "2021-2026 surge and fall"))
+
+# Quarterly inflation (q-o-q, in %), whole sample from 2000
+inflation %>%
+  filter(year(date) >= 2000) %>%
+  group_by(series) %>%
+  summarise(quarters = sum(!is.na(qoq)),
+            mean     = mean(qoq),
+            sd       = sd(qoq),
+            min      = min(qoq),
+            max      = max(qoq),
+            share_negative = mean(qoq < 0)) %>%
+  mutate(across(where(is.double), ~ round(.x, 2)))
+
+# Mean year-on-year inflation (in %) by sub-period
+inflation %>%
+  filter(!is.na(yoy)) %>%
+  group_by(series, period) %>%
+  summarise(mean_yoy = round(mean(yoy), 2), .groups = "drop") %>%
+  pivot_wider(names_from = series, values_from = mean_yoy) %>%
+  as.data.frame()          # data.frame shows all columns
+```
+
+The blocks behave very differently, which supports modelling them separately. Oil products are the most volatile, with a standard deviation 23 times that of rents. Rents are stable and almost always rising (only 8 % of quarters are negative). Imported excl. oil falls more often than it rises.
+
+Imported excl. oil has a negative average (−0.12 % per quarter). The second table shows that this comes from the strong-franc period 2009–2016 (−1.8 % y/y); in the other periods the average is close to zero or positive. An ARIMA with drift estimated from 2000 would carry this negative average into the forecast, i.e. extrapolate the strong-franc deflation to the whole horizon. We therefore include a dummy for 2009–2016 in the model of imported goods (section 5), so that the drift measures growth outside this period.
+
+Imported excl. oil is also volatile for a non-energy block (sd 1.89), while its y/y inflation is much smoother. Most of the q-o-q volatility is therefore the seasonal pattern from sales, which we test in section 3.
+
+Inflation in the early 1990s is four to five times higher than later in every block. We therefore start the estimation sample in 2000 rather than in 1988.
+
+# 3. Seasonality
+
+## 3.1 Testing for seasonality
+
+```{r seasonality-test}
+# Seasonality test for one block on one sample: regress q-o-q inflation on
+# quarter dummies; F-test H0 = "all quarters have the same mean inflation"
+seasonal_test <- function(data) {
+  fit <- lm(qoq ~ factor(quarter(date)), data = data)
+  f   <- summary(fit)$fstatistic
+  tibble(f_stat  = round(f[["value"]], 2),
+         p_value = round(pf(f[["value"]], f[["numdf"]], f[["dendf"]], lower.tail = FALSE), 4),
+         r2      = round(summary(fit)$r.squared, 2))
+}
+
+# Test on the sample from 2000, and on two halves to see if the pattern changed
+seasonality <- inflation %>%
+  filter(year(date) >= 2000, !is.na(qoq)) %>%
+  mutate(sample = if_else(year(date) <= 2012, "2000-2012", "2013-2026"))
+
+bind_rows(
+  seasonality %>% mutate(sample = "2000-2026"),
+  seasonality) %>%
+  group_by(series, sample) %>%
+  group_modify(~ seasonal_test(.x)) %>%
+  ungroup() %>%
+  as.data.frame()
+
+# Mean q-o-q inflation by quarter: the seasonal pattern itself
+seasonality %>%
+  group_by(series, sample, q = paste0("Q", quarter(date))) %>%
+  summarise(mean_qoq = round(mean(qoq), 2), .groups = "drop") %>%
+  pivot_wider(names_from = q, values_from = mean_qoq) %>%
+  as.data.frame()
+```
+
+The blocks fall into three groups.
+
+1.  Imported excl. oil is the most seasonal block. Quarter dummies explain about two thirds of its q-o-q inflation (R² = 0.67, F = 70). Prices fall in Q1 and Q3 and rise in Q2 and Q4, in line with the January and July sales. The pattern weakens strongly between the two halves: Q3 goes from −2.64 to −1.13 and Q4 from +1.84 to +0.23.
+
+2.  Domestic excl. rents is also clearly seasonal (R² = 0.44), with a stable pattern. Q1 is about +0.5 % in both halves, as many prices are adjusted at the start of the year (tariffs, administered prices, services). Only Q4 changes, from about 0 to −0.33.
+
+3.  Rents and oil products show little seasonality. For rents the test never rejects (p = 0.59 on the full sample, 0.93 after 2012). For oil it rejects only on the full sample at 5 % (p = 0.01, R² = 0.10).
+
+Headline CPI is seasonal (R² = 0.43), mainly through imported and domestic goods, and its seasonality weakens together with the imported pattern (R² 0.62 → 0.39).
+
+Since the seasonal pattern of imported goods changes over time, fixed quarter dummies would not describe it well. We therefore remove the seasonality with X-13ARIMA-SEATS, which lets the seasonal pattern evolve.
+
+## 3.2 Seasonal adjustment with X-13
+
+We adjust each block with X-13ARIMA-SEATS and estimate all models on the adjusted series. Our target, headline y-o-y inflation, is not seasonally adjusted, so the seasonal component forecast by X-13 is added back to the model forecasts (section 8).
+
+```{r x13}
+# Estimation sample: 2000Q1 onwards
+sample_2000 <- quarterly %>% filter(year(date) >= 2000)
+
+# The 4 blocks
+blocks <- c(oil       = "Oil products",
+            rent      = "Rents",
+            imp_xoil  = "Imported excl. oil",
+            dom_xrent = "Domestic excl. rents")
+
+# X-13 on one price index starting at start_date, with the seasonal
+# component forecast h quarters ahead. Same function (and arguments) as
+# x13_adjust() in R/models.R, used by scripts 04-06.
+# We impose the log transformation (we model logs)
+# and keep the other defaults: automatic ARIMA model, automatic outlier
+# detection, SEATS decomposition. X-13 also forecasts the seasonal component
+# h quarters ahead (seats.appendfcst), which we need to put the seasonality
+# back into our forecasts. Everything is returned on the log x 100 scale:
+#   sa:    seasonally adjusted series = log level - seasonal component
+#   sf_fc: forecast of the seasonal component for the next h quarters
+#          (zero if X-13 finds no seasonality)
+x13_adjust <- function(index, start_date, h) {
+  start <- c(year(start_date), quarter(start_date))
+  m <- suppressMessages(seas(ts(index, start = start, frequency = 4),
+                             transform.function = "log", seats.appendfcst = "yes",
+                             forecast.maxlead = h, seats.save = "s10"))
+  s10 <- suppressMessages(series(m, "s10"))
+  n   <- length(index)
+  sf  <- if (is.null(s10)) rep(0, n + h) else 100 * log(as.numeric(s10))[1:(n + h)]
+  list(model = m, sa = 100 * log(index) - sf[1:n], sf_fc = sf[n + 1:h])
+}
+
+x13_fits <- map(names(blocks), \(b) x13_adjust(sample_2000[[paste0("cpi_", b)]],
+                                                         start_date = min(sample_2000$date), h = 4)) %>%
+  set_names(names(blocks))
+
+# Adjusted series (sa_oil, sa_rent, ...) added to the estimation sample
+for (b in names(blocks)) sample_2000[[paste0("sa_", b)]] <- x13_fits[[b]]$sa
+
+# Summary per block. QS test: H0 = no seasonality.
+#   qs_p_raw:      seasonality in the raw series
+#   qs_p_adjusted: seasonality left after adjustment (should not reject)
+imap(x13_fits, \(f, b) {
+  qs_m <- qs(f$model)
+  tibble(block         = blocks[[b]],
+         x13_model     = f$model$model$arima$model,
+         outliers      = paste(grep("^(AO|LS|TC)", names(coef(f$model)), value = TRUE),
+                               collapse = ", "),
+         seasonal      = any(f$sa != 100 * log(sample_2000[[paste0("cpi_", b)]])),
+         qs_p_raw      = qs_m["qssori", "p-val"],
+         qs_p_adjusted = qs_m["qssadj", "p-val"])
+}) %>%
+  list_rbind() %>%
+  mutate(across(where(is.double), ~ round(.x, 3))) %>%
+  as.data.frame()
+```
+
+```{r x13-plots}
+# Seasonal component over time, in % of the level (0 = no seasonal effect)
+map(names(blocks), \(b) tibble(block = blocks[[b]], date = sample_2000$date,
+                               seasonal = 100 * log(sample_2000[[paste0("cpi_", b)]]) -
+                                          sample_2000[[paste0("sa_", b)]])) %>%
+  list_rbind() %>%
+  mutate(block = factor(block, levels = blocks)) %>%
+  ggplot(aes(date, seasonal, colour = paste0("Q", quarter(date)))) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  geom_line() +
+  facet_wrap(~ block, scales = "free_y") +
+  labs(title = "X-13 seasonal component, in %", colour = NULL, x = NULL, y = NULL)
+
+# Standard deviation of q-o-q inflation, raw and adjusted
+map(names(blocks), \(b) tibble(block       = blocks[[b]],
+                               sd_raw      = sd(diff(100 * log(sample_2000[[paste0("cpi_", b)]]))),
+                               sd_adjusted = sd(diff(sample_2000[[paste0("sa_", b)]])))) %>%
+  list_rbind() %>%
+  mutate(across(where(is.double), ~ round(.x, 2))) %>%
+  as.data.frame()
+```
+
+X-13 confirms the results of section 3.1:
+
+- Imported and domestic goods are clearly seasonal (QS p = 0.000), and no seasonality is left after adjustment (p = 0.063 and 0.936). The seasonal component of imported goods shrinks over time, so X-13 follows the weakening pattern found above. Adjustment removes most of their q-o-q volatility: the standard deviation falls from 1.89 to 0.62 for imported goods and from 0.37 to 0.23 for domestic goods.
+- Rents are not adjusted, as X-13 finds no seasonality.
+- Oil products have a small seasonal component, which X-13 removes. Their volatility barely changes (6.54 → 6.17), as it comes from crude prices, not from seasonality.
+
+X-13 also detects three level shifts: 2000Q4 for rents, 2011Q4 for imported goods (franc peak) and 2023Q1 for domestic goods (electricity tariffs). Level shifts are part of the trend, so they remain in the adjusted series.
+
+# 4. Stationarity
+
+```{r unit-roots}
+# Series to test: the adjusted blocks, and the oil drivers (not seasonal)
+test_vars <- c("sa_oil", "sa_rent", "sa_imp_xoil", "sa_dom_xrent",
+               "l_brent_usd", "l_chf_per_usd", "l_brent_chf")
+
+# ADF:  H0 = unit root (non-stationary). Reject if stat < 5% critical value.
+# KPSS: H0 = stationary.                 Reject if stat > 5% critical value.
+# Levels: with constant and trend. First differences: with constant only.
+# ADF lags chosen by BIC (max 4 = one year).
+unit_root_tests <- function(x) {
+  adf_l  <- ur.df(x,       type = "trend", lags = 4, selectlags = "BIC")
+  adf_d  <- ur.df(diff(x), type = "drift", lags = 4, selectlags = "BIC")
+  kpss_l <- ur.kpss(x,       type = "tau")
+  kpss_d <- ur.kpss(diff(x), type = "mu")
+  tibble(adf_level  = adf_l@teststat[1], adf_level_cv5  = adf_l@cval[1, "5pct"],
+         kpss_level = kpss_l@teststat,   kpss_level_cv5 = kpss_l@cval[1, "5pct"],
+         adf_diff   = adf_d@teststat[1], adf_diff_cv5   = adf_d@cval[1, "5pct"],
+         kpss_diff  = kpss_d@teststat,   kpss_diff_cv5  = kpss_d@cval[1, "5pct"])
+}
+
+map(test_vars, \(v) unit_root_tests(sample_2000[[v]])) %>%
+  list_rbind() %>%
+  mutate(series = test_vars, .before = 1) %>%
+  mutate(level_stationary = adf_level < adf_level_cv5 & kpss_level < kpss_level_cv5,
+         diff_stationary  = adf_diff  < adf_diff_cv5  & kpss_diff  < kpss_diff_cv5,
+         across(where(is.double), ~ round(.x, 2))) %>%
+  as.data.frame()
+```
+
+All series are I(1): both tests find a unit root in levels (ADF does not reject, KPSS rejects) and stationarity in first differences (ADF between −3.56 and −7.76, against a critical value of −2.88). We therefore use d = 1 for the three ARIMA blocks, i.e. we model quarterly inflation rather than the price level, as is standard for price indices.
+
+Since oil products, Brent and the exchange rate are all I(1), we can test whether they are cointegrated, which is the condition for the ECM (section 6).
+
+# 5. Model selection: ARIMA blocks
+
+*In-sample: all models in sections 5 to 7 are estimated on the full sample, 2000Q1–2026Q3.*
+
+```{r arima-selection}
+# The three ARIMA blocks: adjusted log levels, as quarterly time series
+arima_vars <- c(rent = "sa_rent", imp_xoil = "sa_imp_xoil", dom_xrent = "sa_dom_xrent")
+to_ts <- function(x) ts(x, start = c(2000, 1), frequency = 4)
+
+# Strong-franc dummy for imported goods excl. oil: D_t = 1 in 2009Q1-2016Q4.
+# It enters in levels as the cumulated dummy, so that after differencing it
+# shifts quarterly growth by delta during that period only:
+#   diff(y)_t = mu + delta * D_t + ARMA.
+# In forecasts D = 0, i.e. the cumulated dummy stays at its last value, and
+# the block grows at the drift mu estimated outside the strong-franc period.
+strong_franc <- function(dates) {
+  cbind(strong_franc = cumsum(dates >= as.Date("2009-01-01") & dates <= as.Date("2016-10-01")))
+}
+block_xreg <- list(rent      = NULL,
+                   imp_xoil  = strong_franc(sample_2000$date),
+                   dom_xrent = NULL)
+
+# External drivers (built in 02_dta_cleaning_jumeau.qmd):
+#   rents:                the mortgage rate,
+#   domestic excl. rents: the SNB policy rate (in %).
+# The driver's changes, lagged 1 to L quarters, enter the growth equation:
+#   diff(y)_t = mu + b_1 dx_{t-1} + ... + b_L dx_{t-L} + ARMA.
+# They enter in levels as the lagged levels x_{t-1}, ..., x_{t-L}, which
+# Arima() differences together with y. L = 0 means no driver.
+block_driver <- list(rent = "mortgage_rate", imp_xoil = NULL, dom_xrent = "policy_rate")
+driver_lag_matrix <- function(b, dates, L) {
+  if (L == 0 || is.null(block_driver[[b]])) return(NULL)
+  rows <- match(dates, quarterly$date)
+  as.matrix(quarterly[rows, paste0(block_driver[[b]], "_l", 1:L)])
+}
+driver_lags <- list(rent = c(0, 1, 2, 4), imp_xoil = 0, dom_xrent = c(0, 1, 2, 4))
+
+# Candidates: ARIMA(p,1,q) with drift, p = 0..3, q = 0..2 (12 models),
+# plus the strong-franc dummy for imported goods, and 0, 1, 2 or 4 lags of
+# the driver for rents and domestic goods (48 models each). BIC chooses the
+# orders and the number of driver lags together, all on the same sample.
+# No seasonal term: the series are seasonally adjusted.
+grid <- expand_grid(p = 0:3, q = 0:2)
+
+fit_grid <- function(y, xreg = NULL, L = 0) {
+  pmap(grid, \(p, q) {
+    fit <- tryCatch(Arima(y, order = c(p, 1, q), include.drift = TRUE, xreg = xreg),
+                    error = function(e) NULL)
+    if (is.null(fit)) return(NULL)
+    tibble(p = p, q = q, L = L, aic = fit$aic, bic = fit$bic,
+           # Ljung-Box on residuals, 8 lags (2 years): H0 = no autocorrelation
+           lb_p = Box.test(residuals(fit), lag = 8, type = "Ljung-Box",
+                           fitdf = p + q)$p.value)
+  }) %>% list_rbind()
+}
+
+arima_grid <- imap(arima_vars, \(v, b) {
+  map(driver_lags[[b]], \(L)
+    fit_grid(to_ts(sample_2000[[v]]),
+             cbind(block_xreg[[b]], driver_lag_matrix(b, sample_2000$date, L)), L)) %>%
+    list_rbind() %>%
+    mutate(block = blocks[[b]], .before = 1)
+}) %>%
+  list_rbind()
+
+# Best 3 models by BIC in each block
+arima_grid %>%
+  group_by(block) %>%
+  slice_min(bic, n = 3) %>%
+  mutate(across(c(aic, bic, lb_p), ~ round(.x, 3))) %>%
+  as.data.frame()
+```
+
+```{r arima-chosen}
+# Chosen model of each block: lowest BIC
+best <- arima_grid %>% group_by(block) %>% slice_min(bic, n = 1) %>% ungroup()
+arima_orders <- map(names(arima_vars), \(b) {
+  row <- filter(best, block == blocks[[b]])
+  c(row$p, 1, row$q)
+}) %>% set_names(names(arima_vars))
+
+# Chosen number of driver lags per block (0 = no driver)
+chosen_lags <- map_dbl(names(arima_vars), \(b) filter(best, block == blocks[[b]])$L) %>%
+  set_names(names(arima_vars))
+chosen_lags
+
+# Regressors of each chosen model: dummy and/or driver lags
+model_xreg <- function(b, dates) {
+  dummy <- if (b == "imp_xoil") strong_franc(dates) else NULL
+  cbind(dummy, driver_lag_matrix(b, dates, chosen_lags[[b]]))
+}
+
+# Re-estimate the chosen models, used for the diagnostics (section 7).
+# The coefficient table is reported in 04_model_estimation.qmd, section 2.
+best_fits <- imap(arima_orders, \(ord, b)
+  Arima(to_ts(sample_2000[[arima_vars[[b]]]]), order = ord, include.drift = TRUE,
+        xreg = model_xreg(b, sample_2000$date)))
+
+# Rents: the chosen model against the best model without the mortgage rate
+arima_grid %>%
+  filter(block == blocks[["rent"]]) %>%
+  group_by(with_rate = L > 0) %>%
+  slice_min(bic, n = 1) %>%
+  mutate(across(c(aic, bic, lb_p), ~ round(.x, 3))) %>%
+  as.data.frame()
+
+# Domestic goods: best model with the policy rate (any number of lags) against
+# the best model without it
+arima_grid %>%
+  filter(block == blocks[["dom_xrent"]]) %>%
+  group_by(with_policy_rate = L > 0) %>%
+  slice_min(bic, n = 1) %>%
+  mutate(across(c(aic, bic, lb_p), ~ round(.x, 3))) %>%
+  as.data.frame()
+
+# Coefficients of the chosen rents model
+fit_rent <- best_fits[["rent"]]
+tibble(term = names(coef(fit_rent)), estimate = coef(fit_rent),
+       t = coef(fit_rent) / sqrt(diag(fit_rent$var.coef))) %>%
+  mutate(across(where(is.double), ~ round(.x, 3))) %>%
+  as.data.frame()
+```
+
+We select the model with the lowest BIC, which penalises additional parameters more than the AIC and therefore favours parsimonious models, and check the residuals with a Ljung-Box test.
+
+**Rents: ARIMA(3,1,0) with drift and the mortgage rate (lags 1 and 2).** BIC selects the mortgage rate with two lags, and the same AR orders as without it. The fit improves strongly (BIC −49.1, against −20.6 for the best model without the rate). A rise of 1 pp in the mortgage rate raises rent growth by about 1.1 pp in the following quarter and 0.8 pp in the quarter after (t = 7.1 and 5.0), in line with the legal pass-through of rate changes to rents with a delay of one to two quarters (notice periods and the quarterly rent survey). The drift (0.40 % per quarter, about 1.6 % per year) now measures rent growth at a constant mortgage rate. The residuals show no autocorrelation.
+
+**Imported excl. oil: ARIMA(0,1,2) with drift and a dummy for 2009Q1–2016Q4.** The strong-franc period is a temporary regime: after the franc's appreciation in 2011 and the removal of the EUR/CHF floor in 2015, import prices fell for several years. The dummy shifts the mean growth of imported goods during these years only. It is significant: growth was 0.53 pp lower per quarter (t = −3.3). Outside this period the drift is close to zero (0.03 % per quarter, not significant), and this is the growth used in the forecast, where the dummy is zero. Including the dummy also improves the fit (BIC 188.5, against 191.5 for the best model without dummy). The second MA term is significant (0.40, t = 4.1), and the residuals show no autocorrelation (Ljung-Box p = 0.20).
+
+**Domestic excl. rents: ARIMA(1,1,1) with drift.** Both coefficients are significant (ar1 = 0.83, ma1 = −0.45) and the residuals pass the Ljung-Box test (p = 0.19). The drift of 0.15 % per quarter (about 0.6 % per year) is significant (t = 2.6).
+
+The SNB policy rate improves the domestic model, and BIC selects it: the best model is ARIMA(1,1,1) with one lag of the policy rate (BIC −40.2, against −36.3 without it). A rise of 1 pp in the policy rate is followed by 0.22 pp higher domestic inflation in the next quarter (t = 3.0). The positive sign does not mean that higher rates raise prices: the SNB raises its rate when it expects inflationary pressure, so the rate signals inflation that is about to show up in domestic prices. The AR and MA coefficients and the drift are almost unchanged, and the residuals show no autocorrelation.
+
+# 6. Oil products: cointegration and ECM
+
+```{r oil-long-run}
+# Oil block variables (logs x 100), from 2000Q1
+oil <- sample_2000 %>%
+  transmute(date,
+            oil   = sa_oil,           # CPI oil products, seasonally adjusted
+            brent = l_brent_usd,      # Brent, USD per barrel
+            usd   = l_chf_per_usd,    # CHF per USD
+            trend = row_number())     # linear trend (1, 2, 3, ...)
+
+```
+
+### Long-run relation (static regression in levels)
+
+```{r}
+# Without and with a linear trend; the trend captures slowly rising
+# taxes and margins (mineral oil tax, CO2 levy since 2008)
+lr_const <- lm(oil ~ brent + usd,         data = oil)
+lr_trend <- lm(oil ~ brent + usd + trend, data = oil)
+summary(lr_const)$coefficients
+summary(lr_trend)$coefficients
+```
+
+The long-run relation depends on the trend. With a constant only, the USD coefficient has the wrong sign (−0.09). With a trend, all coefficients are significant: Brent 0.42, USD 0.60, trend 0.41 % per quarter (about 1.6 % per year).
+
+We interpret the trend economically: Swiss fuel prices include per-litre taxes (mineral oil tax, CO2 levy since 2008) and distribution margins that rise over time independently of crude prices. These components also explain why the Brent elasticity is below 1.
+
+### Engle-Granger cointegration test
+
+```{r}
+# Is the long-run residual (the gap) stationary?
+# ADF on the residuals, no constant (they have mean 0 by construction).
+# Critical values are not the usual ADF ones, because the residuals come
+# from an estimated regression. MacKinnon (2010), 3 variables, 5% level:
+# -3.74 (constant), -4.10 (constant + trend).
+eg_stat <- function(fit) {
+  ur.df(residuals(fit), type = "none", lags = 4, selectlags = "BIC")@teststat[1]
+}
+tibble(long_run = c("constant", "constant + trend"),
+       eg_stat  = c(eg_stat(lr_const), eg_stat(lr_trend)),
+       cv_5pct  = c(-3.74, -4.10)) %>%
+  mutate(cointegrated = eg_stat < cv_5pct)
+
+```
+
+With a constant only, the Engle-Granger test does not reject (−3.18 vs −3.74): without the trend there is no stable long-run relation. With a trend, it rejects clearly (−5.87 vs −4.10): oil products, Brent and USD are cointegrated.
+
+### Johansen trace test (system approach, robustness check)
+
+```{r}
+# r = number of cointegrating relations; reject "r = 0" if stat > critical value.
+# K = 2 lags in levels, trend in the cointegrating relation.
+johansen <- ca.jo(oil[, c("oil", "brent", "usd")], type = "trace",
+                  ecdet = "trend", K = 2, spec = "transitory")
+cbind(stat = round(johansen@teststat, 2), johansen@cval)
+```
+
+The trace test rejects r = 0 at 5 % (44.14 \> 42.44) and does not reject r ≤ 1 (17.03 \< 25.32). Both tests therefore find exactly one cointegrating relation.
+
+### Are Brent and USD exogenous?
+
+```{r}
+# The single-equation ECM treats Brent and USD as given. Two checks:
+# (a) Loadings of the VECM: alpha measures how strongly each variable
+#     adjusts to the long-run gap. Only oil products should adjust, i.e.
+#     alpha should be significant for oil and not for Brent or USD.
+#     H0 (per equation) = alpha = 0.
+vecm <- cajorls(johansen, r = 1)$rlm
+map(summary(vecm), \(s) s$coefficients["ect1", ]) %>%
+  bind_rows(.id = "equation") %>%
+  mutate(across(where(is.double), ~ round(.x, 3))) %>%
+  as.data.frame()
+
+# (b) No feedback: past changes in oil product prices do not help predict
+#     Brent or USD (Granger causality, 4 lags = one year).
+#     H0 = oil products do not Granger-cause the driver.
+oil_diff <- oil %>%
+  transmute(d_oil = oil - lag(oil), d_brent = brent - lag(brent), d_usd = usd - lag(usd)) %>%
+  drop_na()
+tibble(driver  = c("Brent", "USD"),
+       p_value = c(grangertest(d_brent ~ d_oil, order = 4, data = oil_diff)$`Pr(>F)`[2],
+                   grangertest(d_usd   ~ d_oil, order = 4, data = oil_diff)$`Pr(>F)`[2])) %>%
+  mutate(p_value = round(p_value, 3))
+```
+
+The single-equation ECM assumes that the drivers do not depend on Swiss oil product prices. Both checks support this:
+
+- Weak exogeneity: in the Johansen VECM, only oil products adjust to the long-run gap. Their loading is −0.45 and significant (t = −2.5, p = 0.01), while the loadings of Brent (−0.08, p = 0.87) and USD (0.07, p = 0.55) are close to zero and not significant. Brent and USD therefore do not react to deviations from the long-run relation: they are weakly exogenous.
+- No feedback: past oil product inflation does not Granger-cause Brent (p = 0.33) or USD (p = 0.26).
+
+We therefore treat Brent and USD as exogenous and estimate a single equation for oil products. The VECM adjustment coefficient of oil products (−0.45) is also very close to the one of the ECM below.
+
+### Same effect of Brent and of the exchange rate?
+
+```{r}
+# If b_brent = b_usd, only Brent in CHF matters. Re-parametrised so that the
+# coefficient on usd is b_usd - b_brent: H0 = this coefficient is 0.
+summary(lm(oil ~ I(brent + usd) + usd + trend, data = oil))$coefficients["usd", ]
+```
+
+Equal elasticities are rejected (t = 3.88 on b_usd − b_brent = 0.18), so we keep Brent and the USD rate as separate variables rather than using Brent in CHF.
+
+### Short-run dynamics: ECM and lag selection
+
+```{r oil-ecm}
+# d_oil_t = c + alpha * ect_(t-1) + b * d_brent_t + g * d_usd_t
+#           + L lags of d_oil, d_brent and d_usd
+# ect = residual of the long-run relation with trend (deviation from equilibrium)
+make_ecm_data <- function(oil_data, lr_fit, max_lag = 4) {
+  d <- oil_data %>%
+    mutate(ect_l1  = lag(residuals(lr_fit)),
+           d_oil   = oil   - lag(oil),
+           d_brent = brent - lag(brent),
+           d_usd   = usd   - lag(usd))
+  for (i in seq_len(max_lag)) {
+    d[[paste0("d_oil_l",   i)]] <- lag(d$d_oil,   i)
+    d[[paste0("d_brent_l", i)]] <- lag(d$d_brent, i)
+    d[[paste0("d_usd_l",   i)]] <- lag(d$d_usd,   i)
+  }
+  d
+}
+ecm_data <- make_ecm_data(oil, lr_trend)
+
+ecm_formula <- function(L) {
+  lags <- if (L == 0) NULL else paste0(c("d_oil_l", "d_brent_l", "d_usd_l"), rep(1:L, each = 3))
+  reformulate(c("ect_l1", "d_brent", "d_usd", lags), response = "d_oil")
+}
+
+# All models on the same sample (lose the first 5 quarters), so BIC is comparable
+ecm_sample <- ecm_data %>% slice(6:n())
+ecm_lags <- map(0:4, \(L) {
+  fit <- lm(ecm_formula(L), data = ecm_sample)
+  tibble(lags    = L,
+         bic     = BIC(fit),
+         alpha   = coef(fit)[["ect_l1"]],
+         t_alpha = summary(fit)$coefficients["ect_l1", "t value"],
+         r2      = summary(fit)$r.squared,
+         lb_p    = Box.test(residuals(fit), lag = 8, type = "Ljung-Box")$p.value)
+}) %>%
+  list_rbind() %>%
+  mutate(across(where(is.double), ~ round(.x, 3)))
+
+# BIC table: one row per number of lags (lower BIC = better)
+ecm_lags %>% as.data.frame()
+
+# Chosen number of lags: lowest BIC
+ecm_L <- ecm_lags$lags[which.min(ecm_lags$bic)]
+ecm_L
+
+# Chosen ECM, estimated on all available quarters
+ecm_fit <- lm(ecm_formula(ecm_L), data = ecm_data)
+round(summary(ecm_fit)$coefficients, 3)
+```
+
+BIC selects 1 lag (514 vs 523 with no lags), and the residuals show no autocorrelation (Ljung-Box p = 0.36).
+
+- α = −0.45 (t = −5.2): about 45 % of a deviation from the long-run equilibrium is corrected each quarter (half-life of about 1.2 quarters).
+- Pass-through is fast: within the same quarter, Brent passes 0.30 and the USD rate 0.49, compared with long-run elasticities of 0.42 and 0.60.
+- The lagged terms are not significant at 5 % (lagged oil inflation: p = 0.05); we keep them so that all three variables have the same lag structure.
+
+The ECM is a conditional model: forecasts of oil products require paths for Brent and the USD rate. We assume both stay at their last observed value (random walk without drift).
+
+# 7. Diagnostic tests
+
+```{r diagnostics}
+# Residuals of the chosen models: the 3 ARIMA blocks and the oil ECM
+model_resid <- c(map(best_fits, residuals), list(oil = residuals(ecm_fit)))
+
+# Jarque-Bera: H0 = normal residuals
+# Ljung-Box on squared residuals: H0 = constant variance (no ARCH)
+imap(model_resid, \(e, b) {
+  tibble(block  = blocks[[b]],
+         jb_p   = jarque.bera.test(e)$p.value,
+         arch_p = Box.test(e^2, lag = 4, type = "Ljung-Box")$p.value)
+}) %>%
+  list_rbind() %>%
+  mutate(across(where(is.double), ~ round(.x, 3))) %>%
+  as.data.frame()
+```
+
+No model shows changing variance (all ARCH p \> 0.10). The oil ECM residuals are normal (p = 0.35). The residuals of the three ARIMA models are not, because of the level shifts found by X-13 (2000Q4 for rents, 2011Q4 for imported goods, 2023Q1 for domestic goods), which remain in the adjusted series. This does not bias the point forecasts, but the prediction intervals of these blocks are less reliable.
+
+With the mortgage rate, part of the 2000Q4 rent spike is explained (the rise in mortgage rates in 1999–2000, passed on to rents with a delay): the Jarque-Bera p-value for rents rises from 0.001 to 0.004, but normality is still rejected at 5 %.
+
+# 8. Forecast evaluation
+
+*Out-of-sample: at each origin, every step (seasonal adjustment, estimation, forecast) uses only the data available at that time.*
+
+```{r evaluation}
+# Pseudo out-of-sample, expanding window. At each origin t (2012Q4, 2013Q1, ...)
+# we use only data up to t:
+#   1. run X-13 on each block and forecast its seasonal component,
+#   2. estimate the model on the adjusted series and forecast it,
+#   3. add the seasonal component back,
+# and compare the forecast log level with the actual (raw) one, 1 to 4
+# quarters ahead. At h = 4 the error is the error on y-o-y inflation.
+# Benchmark: AR(1) on raw q-o-q inflation, i.e. ARIMA(1,1,0) with drift on
+# the raw log level.
+first_index <- which(sample_2000$date == as.Date("2012-10-01"))   # position of 2012Q4
+n_obs   <- nrow(sample_2000)
+origins <- first_index:(n_obs - 1)
+h_max   <- 4
+
+# ECM forecast of the adjusted oil level from origin t, with Brent and USD
+# held at their last value (random walk: d_brent = d_usd = 0 after t).
+# The recursion below is written for the ECM chosen in section 6 (1 lag).
+stopifnot(ecm_L == 1)
+ecm_forecast <- function(oil_t, h) {
+  lr    <- lm(oil ~ brent + usd + trend, data = oil_t)
+  d     <- make_ecm_data(oil_t, lr, max_lag = 1)
+  ecm   <- lm(ecm_formula(1), data = d)
+  now   <- tail(d, 1)
+  level <- now$oil
+  path  <- numeric(h)
+  for (i in 1:h) {
+    new <- tibble(ect_l1 = level - predict(lr, now %>% mutate(trend = trend + i - 1)),
+                  d_brent = 0, d_usd = 0, d_oil_l1 = now$d_oil,
+                  d_brent_l1 = if (i == 1) now$d_brent else 0,
+                  d_usd_l1   = if (i == 1) now$d_usd   else 0)
+    now$d_oil <- predict(ecm, new)
+    level     <- level + now$d_oil
+    path[i]   <- level
+  }
+  path
+}
+
+oos_errors <- map(origins, \(t) {
+  n_h  <- min(h_max, n_obs - t)
+  hist <- sample_2000 %>% slice(1:t)
+  map(names(blocks), \(b) {
+    raw <- 100 * log(sample_2000[[paste0("cpi_", b)]])
+    adj <- x13_adjust(hist[[paste0("cpi_", b)]], start_date = min(hist$date), h = h_max)
+    f_sa <- if (b == "oil") {
+      ecm_forecast(tibble(oil = adj$sa, brent = hist$l_brent_usd,
+                          usd = hist$l_chf_per_usd, trend = 1:t), n_h)
+    } else {
+      # regressors built on the data up to t. In the forecast the cumulated
+      # dummy stays at its last value (D = 0) and the driver is held at its
+      # last value: its lagged levels x_{t+j-k} are observed when t+j-k <= t
+      # and equal x_t afterwards.
+      xr <- model_xreg(b, hist$date)
+      xr_new <- NULL
+      if (!is.null(xr)) {
+        xr_new <- matrix(rep(xr[t, ], each = n_h), n_h, ncol(xr), dimnames = list(NULL, colnames(xr)))
+        L <- chosen_lags[[b]]
+        if (L > 0) {
+          v <- block_driver[[b]]
+          x <- quarterly[[v]][match(hist$date, quarterly$date)]
+          for (k in 1:L) for (j in 1:n_h) {
+            xr_new[j, paste0(v, "_l", k)] <- if (t + j - k <= t) x[t + j - k] else x[t]
+          }
+        }
+      }
+      fit <- Arima(to_ts(adj$sa), order = arima_orders[[b]], include.drift = TRUE, xreg = xr)
+      as.numeric(forecast(fit, h = n_h, xreg = xr_new)$mean)
+    }
+    f_ar1 <- forecast(Arima(to_ts(raw[1:t]), order = c(1, 1, 0), include.drift = TRUE),
+                      h = n_h)$mean
+    tibble(block = blocks[[b]], origin = sample_2000$date[t], h = 1:n_h,
+           e_model = raw[t + 1:n_h] - (f_sa + adj$sf_fc[1:n_h]),
+           e_ar1   = raw[t + 1:n_h] - as.numeric(f_ar1))
+  }) %>% list_rbind()
+}) %>% list_rbind()
+
+# Accuracy at h = 1 and h = 4: RMSE, ratio to AR(1), Diebold-Mariano test.
+# ratio < 1: our model beats the AR(1). DM test: H0 = equally accurate.
+oos_errors %>%
+  filter(h %in% c(1, 4)) %>%
+  group_by(block = factor(block, levels = blocks), h) %>%
+  summarise(n          = n(),
+            rmse_model = sqrt(mean(e_model^2)),
+            rmse_ar1   = sqrt(mean(e_ar1^2)),
+            ratio      = rmse_model / rmse_ar1,
+            dm_p       = dm.test(e_model, e_ar1, h = first(h), power = 2)$p.value,
+            .groups = "drop") %>%
+  mutate(across(where(is.double), ~ round(.x, 3))) %>%
+  as.data.frame()
+```
+
+We evaluate the models by pseudo out-of-sample forecasting from 2012Q4 (55 forecasts one quarter ahead, 52 four quarters ahead). At each origin the seasonal adjustment, the estimation and the forecast use only the data available at that time, and the X-13 seasonal forecast is added back before comparing with the raw series.
+
+- **Imported and domestic goods** outperform the AR(1) one quarter ahead: errors are 38 % and 28 % smaller, and the difference is significant (DM p = 0.001 and 0.020). The gain comes from the seasonal adjustment, which the AR(1) does not have. Four quarters ahead our models remain better (ratios 0.89 and 0.93), but not significantly, as the seasonal pattern largely cancels over a full year.
+- **Oil products (ECM)** are forecast better than with the AR(1) at both horizons (ratio 0.91 and 0.92), but not significantly. Oil prices are difficult to forecast, and we assume constant Brent and USD after each origin.
+- **Rents** with the mortgage rate are slightly more accurate than the AR(1) (MSFE ratios 0.95 one quarter ahead and 0.98 four quarters ahead), whereas without the rate they were slightly less accurate (1.06 and 1.01). The difference is not significant.
+
+With about 50 forecasts the DM test has limited power, and the evaluation window includes the 2021–2023 inflation surge, which none of the models anticipated.

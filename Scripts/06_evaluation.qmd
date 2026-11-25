@@ -118,6 +118,16 @@ write_csv(recursive, here("output", "eval_forecasts.csv"))
 
 # Forecasts with an observed outcome, and their errors (e = actual - forecast)
 evaluated <- recursive %>% filter(!is.na(actual)) %>% mutate(error = actual - model)
+
+# Last forecast error known at the origin, for the strong-efficiency test:
+# the error of the h-step forecast made h quarters earlier, whose target is
+# the origin itself (so its outcome is observed at the origin). Missing for
+# the first h origins.
+evaluated <- evaluated %>%
+  mutate(origin_prev = origin %m-% months(3 * h)) %>%
+  left_join(evaluated %>% select(origin_prev = origin, h, error_lag = error),
+            by = c("origin_prev", "h")) %>%
+  select(-origin_prev)
 count(evaluated, h) %>% as.data.frame()
 
 # Case study at h = 8 (two years ahead): for a few origins with inflation far
@@ -176,8 +186,10 @@ The forecasts follow the outcome closely over the first quarters and then conver
 #     Joint test of unbiasedness and efficiency.
 #   Unbiasedness: error = tau;  H0: tau = 0.
 #   Strong efficiency: error = beta' Omega_t, with Omega_t = constant, the
-#     forecast itself, the last observed headline inflation and the y-y
-#     change in Brent at the origin;  H0: beta = 0.
+#     forecast itself, the last observed headline inflation, the y-y change
+#     in Brent and the last forecast error known at the origin;  H0: beta = 0.
+#     Omega_t contains everything in the weak-efficiency information set
+#     (past errors), so strong efficiency implies weak efficiency.
 #   Weak efficiency: h-step errors are at most MA(h-1). We fit an MA(h-1)
 #     to the errors and test that its residuals are white noise (Ljung-Box,
 #     4 lags); for h = 1 this is a Ljung-Box test on the errors themselves.
@@ -188,8 +200,9 @@ absolute <- evaluated %>%
     h <- key$h
     mz     <- lm(actual ~ model, data = d)
     unbias <- lm(error ~ 1, data = d)
-    strong <- lm(error ~ model + pi_origin + brent_yy_origin, data = d)
+    strong <- lm(error ~ model + pi_origin + brent_yy_origin + error_lag, data = d)
     tibble(n            = nrow(d),
+           n_strong     = nobs(strong),      # first h origins have no error_lag
            mean_error   = mean(d$error),
            var_error    = mean((d$error - mean(d$error))^2),
            rmse         = sqrt(mean(d$error^2)),
@@ -197,13 +210,13 @@ absolute <- evaluated %>%
            mz_beta      = coef(mz)[[2]],
            mz_p         = wald_hac(mz, diag(2), c(0, 1), h),
            unbiased_p   = wald_hac(unbias, matrix(1), 0, h),
-           strong_eff_p = wald_hac(strong, diag(4), rep(0, 4), h),
+           strong_eff_p = wald_hac(strong, diag(5), rep(0, 5), h),
            weak_eff_p   = weak_efficiency_p(d$error, h))
   }) %>%
   ungroup()
 
 absolute %>%
-  mutate(across(-c(h, n), ~ round(.x, 3))) %>%
+  mutate(across(-c(h, n, n_strong), ~ round(.x, 3))) %>%
   as.data.frame()
 
 write_csv(absolute, here("output", "eval_absolute.csv"))
@@ -228,7 +241,7 @@ ggsave(here("figures", "error_variance_by_h.png"), variance_chart,
 
 - **Unbiasedness**: the forecasts are unbiased at every horizon. The mean error is between −0.13 and +0.08 pp, and the test never rejects (p \> 0.65).
 - **Mincer-Zarnowitz**: not rejected up to five quarters ahead (p \> 0.06), but rejected from h = 6 on (p \< 0.05). At long horizons the slope b is negative: the forecasts are close to the long-run level and carry little information on the actual outcome, which is dominated by the shocks of the period.
-- **Strong efficiency**: rejected at most horizons. Information available at the origin, in particular the current inflation rate and the recent change in Brent, could still be used to improve the forecasts.
+- **Strong efficiency**: rejected at every horizon (p \< 0.02). The information set includes the forecast, current inflation, the recent change in Brent and the last forecast error known at the origin, so it contains the past errors used for weak efficiency. Information available at the origin could therefore still be used to improve the forecasts. The test loses the first h origins, for which no past error is observed yet (54 forecasts at h = 1, 32 at h = 12).
 - **Weak efficiency**: rejected at 5 % at h = 1 and h = 5–7, not at the other horizons. Some autocorrelation remains in the errors, consistent with the persistent misses during the 2021–2023 surge.
 - **Error variance**: it increases with the horizon up to about two years (from 0.13 to 1.54) and is roughly stable afterwards, as expected for an optimal forecast. The slight decline at the longest horizons comes from the smaller number of observations, which excludes the latest origins.
 
@@ -283,12 +296,13 @@ Exploratory checks, not (yet) part of the report.
 ```{r diag-strong-efficiency}
 # Strong-efficiency regression, coefficient by coefficient:
 #   error = b0 + b1 * forecast + b2 * pi_origin + b3 * brent_yy_origin
+#           + b4 * error_lag
 # t-statistics with the same Newey-West s.e. (h-1 lags) as wald_hac().
 # |t| > 2: that variable, known at the origin, predicts our errors.
 strong_coefs <- evaluated %>%
   group_by(h) %>%
   group_modify(function(d, key) {
-    fit <- lm(error ~ model + pi_origin + brent_yy_origin, data = d)
+    fit <- lm(error ~ model + pi_origin + brent_yy_origin + error_lag, data = d)
     se  <- sqrt(diag(sandwich::NeweyWest(fit, lag = key$h - 1,
                                          prewhite = FALSE, adjust = TRUE)))
     tibble(term = names(coef(fit)), estimate = coef(fit), t = coef(fit) / se)

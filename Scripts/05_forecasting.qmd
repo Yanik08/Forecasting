@@ -13,7 +13,7 @@ This file follows `04_model_estimation.qmd`. We forecast headline year-on-year i
 The steps are:
 
 1.  **Point forecast**: forecast of each block, aggregated to headline inflation with the CPI weights.
-2.  **Density forecast**: simulated paths, giving the uncertainty around the point forecast.
+2.  **Density forecast**: Gaussian density, from simulated paths with normally distributed shocks, giving the uncertainty around the point forecast.
 3.  **Oil price scenario**: headline inflation if Brent rises permanently.
 4.  **Fan chart**: point forecast, bands and scenario in one figure.
 
@@ -99,11 +99,17 @@ With a weight of 59 %, domestic goods drive most of the long-run level of headli
 # 2. Density forecast
 
 ```{r}
-# Bootstrap: for each simulated path and each future quarter we draw ONE past
-# quarter at random and take, from that same quarter, the residuals of all
-# four block models and the changes in Brent and USD/CHF. Drawing the same
-# quarter for everything keeps the correlation between blocks and drivers
-# (e.g. an oil shock hits Brent and the oil block at the same time).
+# Gaussian density forecast (in-sample, doc section 5.1). The shocks of the
+# four block models and the changes in Brent and USD/CHF are assumed jointly
+# normal with mean zero: eps_t ~ N(0, Sigma). Sigma is estimated from the
+# residuals of the models and the observed driver changes over the same
+# quarters, so it keeps the correlation between blocks and drivers (e.g. an
+# oil shock hits Brent and the oil block at the same time).
+# For each simulated path we draw one shock vector per future quarter, feed
+# it into the models and aggregate to headline inflation. With normal shocks
+# this gives the same density as the analytic formula for a single ARIMA
+# (variance sigma^2 * sum psi_j^2), and also covers the oil ECM, the drivers
+# and the aggregation, for which there is no simple formula.
 # Parameter uncertainty is not included, and the X-13 seasonal component is
 # added to every path as it is (no uncertainty on the seasonal pattern).
 N <- n_sims
@@ -119,21 +125,33 @@ for (b in names(arima_fits)) res[[b]] <- as.numeric(residuals(arima_fits[[b]]))
 d_brent <- c(NA, diff(q$y_brent))
 d_usd   <- c(NA, diff(q$y_usd))
 
-# One random past quarter per future quarter and path (quarters 3..n have
-# every residual); pick() takes the values of that quarter
-draw <- matrix(sample(3:n, H * N, replace = TRUE), H, N)
-pick <- function(x) matrix(x[draw], H, N)
+# Covariance matrix Sigma of the shocks, over the quarters where all are
+# observed (3..n: the ECM loses the first two). cov() removes the means, so
+# the simulated shocks have mean zero (no drift in Brent and USD/CHF).
+shocks_hist <- cbind(oil = res$oil, rent = res$rent, imp_xoil = res$imp_xoil,
+                     dom_xrent = res$dom_xrent, d_brent = d_brent, d_usd = d_usd)[3:n, ]
+Sigma <- cov(shocks_hist)
+
+# Standard deviations and correlations of the shocks
+round(sqrt(diag(Sigma)), 2)
+round(cov2cor(Sigma), 2)
+
+# Normal draws: H x N shock vectors with covariance Sigma (Cholesky factor);
+# draw() returns the H x N matrix of shocks for one variable
+Z <- matrix(rnorm(H * N * ncol(Sigma)), H * N, ncol(Sigma)) %*% chol(Sigma)
+colnames(Z) <- colnames(Sigma)
+draw <- function(v) matrix(Z[, v], H, N)
 
 # Simulated driver paths: last value plus the drawn changes
-brent_sim <- q$y_brent[n] + apply(pick(d_brent), 2, cumsum)
-usd_sim   <- q$y_usd[n]   + apply(pick(d_usd),   2, cumsum)
+brent_sim <- q$y_brent[n] + apply(draw("d_brent"), 2, cumsum)
+usd_sim   <- q$y_usd[n]   + apply(draw("d_usd"),   2, cumsum)
 
 # Simulated block paths (adjusted), plus the X-13 seasonal component
-sim_y <- list(oil = ecm_paths(ecm, H, brent_sim, usd_sim, shocks = pick(res$oil)) +
+sim_y <- list(oil = ecm_paths(ecm, H, brent_sim, usd_sim, shocks = draw("oil")) +
                 adj$oil$sf_fc)
 for (b in names(arima_fits)) {
   sim_y[[b]] <- arima_paths(arima_fits[[b]], adj[[b]]$sa, H,
-                            shocks = pick(res[[b]])) + adj[[b]]$sf_fc
+                            shocks = draw(b)) + adj[[b]]$sf_fc
 }
 sim_y <- sim_y[block_names]
 
@@ -155,9 +173,11 @@ tibble(date = fc_dates, point = point$headline) %>%
   as.data.frame()
 ```
 
-The uncertainty grows with the horizon and stabilises after about a year. One quarter ahead, the 90 % band is 0.5–1.3 %; from 2028 on it is about −0.4 % to 1.8 %, and the 68 % band about 0.0 % to 1.4 %. The median is slightly above the point forecast, so the distribution is somewhat skewed upwards. The probability that inflation stays within the SNB range of 0–2 % (last column) is close to 100 % in the first two quarters and about 80–85 % from mid-2027 on; almost all of the remaining probability lies below 0 %, not above 2 %.
+The shocks are small for rents, domestic and imported goods (standard deviations of 0.2–0.5 pp per quarter) and large for oil products (2.5) and Brent (16). The strongest correlations are between imported and domestic goods (0.37) and between Brent and the USD rate (−0.24); they are kept in the simulation.
 
-These bands treat the estimated parameters and the seasonal pattern as known, so they understate the true uncertainty. The out-of-sample errors in 06 give a complementary measure.
+The uncertainty grows with the horizon and stabilises after about a year. One quarter ahead, the 90 % band is 0.5–1.3 %; from 2028 on it is about −0.4 % to 1.8 %, and the 68 % band about 0.0 % to 1.3 %. The median is very close to the point forecast (at most 0.04 pp higher): with normal shocks the density is nearly symmetric, the small difference coming from the non-linear aggregation of the blocks. The probability that inflation stays within the SNB range of 0–2 % (last column) is close to 100 % in the first two quarters and about 80–85 % from mid-2027 on; almost all of the remaining probability lies below 0 %, not above 2 %.
+
+These bands assume normal shocks and treat the estimated parameters and the seasonal pattern as known, so they may understate the true uncertainty. The out-of-sample errors in 06 give a complementary measure.
 
 # 3. Oil price scenario
 

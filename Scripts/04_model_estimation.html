@@ -2259,30 +2259,36 @@ x dplyr::filter() masks stats::filter()
 x dplyr::lag()    masks stats::lag()
 i Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(urca)       <span class="co"># ur.df() (ADF), ca.jo() (Johansen), alrtest()</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">here</span>(<span class="st">&quot;R&quot;</span>, <span class="st">&quot;models.R&quot;</span>))</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Parameters. When the project is run with main.R, its values are used;</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co"># otherwise the same values are set here so the file can be rendered alone.</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">inherits</span>(<span class="fu">get0</span>(<span class="st">&quot;start_estimation&quot;</span>), <span class="st">&quot;Date&quot;</span>)) start_estimation <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">&quot;2000-01-01&quot;</span>)</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;fcst_horizon&quot;</span>))     fcst_horizon     <span class="ot">&lt;-</span> <span class="dv">12</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">all</span>(<span class="fu">c</span>(<span class="st">&quot;rent&quot;</span>, <span class="st">&quot;imp_xoil&quot;</span>, <span class="st">&quot;dom_xrent&quot;</span>) <span class="sc">%in%</span> <span class="fu">names</span>(<span class="fu">get0</span>(<span class="st">&quot;arima_specs&quot;</span>)))) {</span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  arima_specs <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">rent      =</span> <span class="fu">list</span>(<span class="at">order =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">0</span>)),</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>                      <span class="at">imp_xoil  =</span> <span class="fu">list</span>(<span class="at">order =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>),</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>                                       <span class="at">dummy =</span> <span class="fu">c</span>(<span class="at">from =</span> <span class="st">&quot;2009-01-01&quot;</span>, <span class="at">to =</span> <span class="st">&quot;2016-10-01&quot;</span>)),</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>                      <span class="at">dom_xrent =</span> <span class="fu">list</span>(<span class="at">order =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">1</span>)),</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>                      <span class="at">headline  =</span> <span class="fu">list</span>(<span class="at">order =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">1</span>)))</span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="fu">here</span>(<span class="st">&quot;output&quot;</span>), <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Quarterly data from 2000Q1, with logs x 100 and the block weights</span></span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>q <span class="ot">&lt;-</span> <span class="fu">load_quarterly</span>(start_estimation)</span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="fu">range</span>(q<span class="sc">$</span>date)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(urca)       <span class="co"># ur.df() (ADF), ca.jo() (Johansen), cajorls() (VECM)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tseries)    <span class="co"># jarque.bera.test()</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Registered S3 method overwritten by &#39;quantmod&#39;:
+  method            from
+  as.zoo.data.frame zoo </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">here</span>(<span class="st">&quot;R&quot;</span>, <span class="st">&quot;models.R&quot;</span>))</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Parameters. When the project is run with main.R, its values are used;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># otherwise the same values are set here so the file can be rendered alone.</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">inherits</span>(<span class="fu">get0</span>(<span class="st">&quot;start_estimation&quot;</span>), <span class="st">&quot;Date&quot;</span>)) start_estimation <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">&quot;2000-01-01&quot;</span>)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">&quot;fcst_horizon&quot;</span>))     fcst_horizon     <span class="ot">&lt;-</span> <span class="dv">12</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">all</span>(<span class="fu">c</span>(<span class="st">&quot;rent&quot;</span>, <span class="st">&quot;imp_xoil&quot;</span>, <span class="st">&quot;dom_xrent&quot;</span>) <span class="sc">%in%</span> <span class="fu">names</span>(<span class="fu">get0</span>(<span class="st">&quot;arima_specs&quot;</span>)))) {</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  arima_specs <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">rent      =</span> <span class="fu">list</span>(<span class="at">order =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">0</span>)),</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>                      <span class="at">imp_xoil  =</span> <span class="fu">list</span>(<span class="at">order =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>),</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>                                       <span class="at">dummy =</span> <span class="fu">c</span>(<span class="at">from =</span> <span class="st">&quot;2009-01-01&quot;</span>, <span class="at">to =</span> <span class="st">&quot;2016-10-01&quot;</span>)),</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>                      <span class="at">dom_xrent =</span> <span class="fu">list</span>(<span class="at">order =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">1</span>)),</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>                      <span class="at">headline  =</span> <span class="fu">list</span>(<span class="at">order =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">1</span>)))</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="fu">here</span>(<span class="st">&quot;output&quot;</span>), <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Quarterly data from 2000Q1, with logs x 100 and the block weights</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>q <span class="ot">&lt;-</span> <span class="fu">load_quarterly</span>(start_estimation)</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a><span class="fu">range</span>(q<span class="sc">$</span>date)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] &quot;2000-01-01&quot; &quot;2026-07-01&quot;</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(q)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(q)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] 107</code></pre>
 </div>
@@ -2291,23 +2297,23 @@ i Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all
 <section id="seasonal-adjustment-and-estimation" class="level1">
 <h1>1. Seasonal adjustment and estimation</h1>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># X-13 on each block, then the ARIMAs and the ECM on the adjusted series.</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># fit_blocks() is the same function used by 05 (forecast) and 06 (evaluation).</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>fits <span class="ot">&lt;-</span> <span class="fu">fit_blocks</span>(q, fcst_horizon, arima_specs)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>sa         <span class="ot">&lt;-</span> <span class="fu">lapply</span>(fits<span class="sc">$</span>adj, <span class="cf">function</span>(a) a<span class="sc">$</span>sa)   <span class="co"># adjusted log levels</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>arima_fits <span class="ot">&lt;-</span> fits<span class="sc">$</span>arima                           <span class="co"># rents, imported, domestic</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>ecm        <span class="ot">&lt;-</span> fits<span class="sc">$</span>ecm                             <span class="co"># oil products</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co"># X-13 result per block: automatic model, seasonality found, outliers</span></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="fu">imap_dfr</span>(fits<span class="sc">$</span>adj, <span class="cf">function</span>(a, b) {</span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block     =</span> b,</span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">x13_model =</span> a<span class="sc">$</span>model<span class="sc">$</span>model<span class="sc">$</span>arima<span class="sc">$</span>model,</span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>         <span class="at">seasonal  =</span> <span class="fu">any</span>(a<span class="sc">$</span>sf_fc <span class="sc">!=</span> <span class="dv">0</span>),</span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>         <span class="at">outliers  =</span> <span class="fu">paste</span>(<span class="fu">grep</span>(<span class="st">&quot;^(AO|LS|TC)&quot;</span>, <span class="fu">names</span>(<span class="fu">coef</span>(a<span class="sc">$</span>model)), <span class="at">value =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>                           <span class="at">collapse =</span> <span class="st">&quot;, &quot;</span>))</span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># X-13 on each block, then the ARIMAs and the ECM on the adjusted series.</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="co"># fit_blocks() is the same function used by 05 (forecast) and 06 (evaluation).</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>fits <span class="ot">&lt;-</span> <span class="fu">fit_blocks</span>(q, fcst_horizon, arima_specs)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>sa         <span class="ot">&lt;-</span> <span class="fu">lapply</span>(fits<span class="sc">$</span>adj, <span class="cf">function</span>(a) a<span class="sc">$</span>sa)   <span class="co"># adjusted log levels</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>arima_fits <span class="ot">&lt;-</span> fits<span class="sc">$</span>arima                           <span class="co"># rents, imported, domestic</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>ecm        <span class="ot">&lt;-</span> fits<span class="sc">$</span>ecm                             <span class="co"># oil products</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="co"># X-13 result per block: automatic model, seasonality found, outliers</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="fu">imap_dfr</span>(fits<span class="sc">$</span>adj, <span class="cf">function</span>(a, b) {</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block     =</span> b,</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">x13_model =</span> a<span class="sc">$</span>model<span class="sc">$</span>model<span class="sc">$</span>arima<span class="sc">$</span>model,</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>         <span class="at">seasonal  =</span> <span class="fu">any</span>(a<span class="sc">$</span>sf_fc <span class="sc">!=</span> <span class="dv">0</span>),</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>         <span class="at">outliers  =</span> <span class="fu">paste</span>(<span class="fu">grep</span>(<span class="st">&quot;^(AO|LS|TC)&quot;</span>, <span class="fu">names</span>(<span class="fu">coef</span>(a<span class="sc">$</span>model)), <span class="at">value =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>                           <span class="at">collapse =</span> <span class="st">&quot;, &quot;</span>))</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>      block      x13_model seasonal outliers
 1       oil (0 1 1)(0 1 1)     TRUE         
@@ -2321,16 +2327,16 @@ i Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all
 <section id="arima-blocks" class="level1">
 <h1>2. ARIMA blocks</h1>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># The orders are set in main.R (arima_specs), selected by BIC in 03.</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Coefficients with standard errors and t-statistics</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>arima_table <span class="ot">&lt;-</span> <span class="fu">imap_dfr</span>(arima_fits, <span class="cf">function</span>(fit, b) {</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  se <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="fu">diag</span>(fit<span class="sc">$</span>var.coef))</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> b, <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(fit)), <span class="at">estimate =</span> <span class="fu">coef</span>(fit),</span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">std_error =</span> se, <span class="at">t_stat =</span> <span class="fu">coef</span>(fit) <span class="sc">/</span> se)</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>arima_table <span class="sc">%&gt;%</span></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># The orders are set in main.R (arima_specs), selected by BIC in 03.</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Coefficients with standard errors and t-statistics</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>arima_table <span class="ot">&lt;-</span> <span class="fu">imap_dfr</span>(arima_fits, <span class="cf">function</span>(fit, b) {</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  se <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="fu">diag</span>(fit<span class="sc">$</span>var.coef))</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> b, <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(fit)), <span class="at">estimate =</span> <span class="fu">coef</span>(fit),</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>         <span class="at">std_error =</span> se, <span class="at">t_stat =</span> <span class="fu">coef</span>(fit) <span class="sc">/</span> se)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>arima_table <span class="sc">%&gt;%</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>       block  term estimate std_error t_stat
 1       rent   ar1    0.847     0.092  9.232
@@ -2345,25 +2351,28 @@ i Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all
 10 dom_xrent   ma1   -0.446     0.113 -3.967
 11 dom_xrent drift    0.147     0.056  2.642</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Fit and residual check per block. Ljung-Box on 8 lags (two years),</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># degrees of freedom corrected for the number of ARMA coefficients.</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="co"># H0 = no autocorrelation left in the residuals.</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>diagnostics <span class="ot">&lt;-</span> <span class="fu">imap_dfr</span>(arima_fits, <span class="cf">function</span>(fit, b) {</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  k  <span class="ot">&lt;-</span> <span class="fu">sum</span>(fit<span class="sc">$</span>arma[<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>])</span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  lb <span class="ot">&lt;-</span> <span class="fu">Box.test</span>(<span class="fu">residuals</span>(fit), <span class="at">lag =</span> <span class="dv">8</span>, <span class="at">type =</span> <span class="st">&quot;Ljung-Box&quot;</span>, <span class="at">fitdf =</span> k)</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> b, <span class="at">aic =</span> <span class="fu">AIC</span>(fit), <span class="at">bic =</span> <span class="fu">BIC</span>(fit), <span class="at">ljung_box_p =</span> lb<span class="sc">$</span>p.value)</span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>diagnostics <span class="sc">%&gt;%</span></span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Fit and residual checks per block, two separate tests:</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   Ljung-Box on 8 lags (two years), degrees of freedom corrected for the</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co">#     number of ARMA coefficients. H0 = no autocorrelation in the residuals.</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   Jarque-Bera. H0 = normal residuals (skewness 0, kurtosis 3).</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>diagnostics <span class="ot">&lt;-</span> <span class="fu">imap_dfr</span>(arima_fits, <span class="cf">function</span>(fit, b) {</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  k  <span class="ot">&lt;-</span> <span class="fu">sum</span>(fit<span class="sc">$</span>arma[<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>])</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  lb <span class="ot">&lt;-</span> <span class="fu">Box.test</span>(<span class="fu">residuals</span>(fit), <span class="at">lag =</span> <span class="dv">8</span>, <span class="at">type =</span> <span class="st">&quot;Ljung-Box&quot;</span>, <span class="at">fitdf =</span> k)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  jb <span class="ot">&lt;-</span> <span class="fu">jarque.bera.test</span>(<span class="fu">residuals</span>(fit))</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> b, <span class="at">aic =</span> <span class="fu">AIC</span>(fit), <span class="at">bic =</span> <span class="fu">BIC</span>(fit),</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>         <span class="at">ljung_box_p =</span> lb<span class="sc">$</span>p.value, <span class="at">jarque_bera_p =</span> jb<span class="sc">$</span>p.value)</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>diagnostics <span class="sc">%&gt;%</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>      block     aic     bic ljung_box_p
-1      rent -33.944 -20.627       0.834
-2  imp_xoil 175.193 188.511       0.198
-3 dom_xrent -46.975 -36.321       0.187</code></pre>
+<pre><code>      block     aic     bic ljung_box_p jarque_bera_p
+1      rent -33.944 -20.627       0.834         0.001
+2  imp_xoil 175.193 188.511       0.198         0.001
+3 dom_xrent -46.975 -36.321       0.187         0.000</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(<span class="fu">left_join</span>(arima_table, diagnostics, <span class="at">by =</span> <span class="st">&quot;block&quot;</span>),</span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>          <span class="fu">here</span>(<span class="st">&quot;output&quot;</span>, <span class="st">&quot;estimates_arima.csv&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(<span class="fu">left_join</span>(arima_table, diagnostics, <span class="at">by =</span> <span class="st">&quot;block&quot;</span>),</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>          <span class="fu">here</span>(<span class="st">&quot;output&quot;</span>, <span class="st">&quot;estimates_arima.csv&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>From script 03:</p>
 <ul>
@@ -2371,17 +2380,17 @@ i Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all
 <li><strong>Imported excl. oil, ARIMA(0,1,2) with a dummy for 2009Q1–2016Q4</strong>: a significant second MA term (0.40). The dummy captures the strong-franc period: growth was 0.53 pp lower per quarter during these years (t = −3.3). Outside this period the drift is close to zero (0.03 % per quarter), which is the growth used in the forecast.</li>
 <li><strong>Domestic excl. rents, ARIMA(1,1,1)</strong>: ar1 = 0.83, ma1 = −0.45 and a significant drift of 0.15 % per quarter.</li>
 </ul>
-<p>No block shows autocorrelation left in the residuals (Ljung-Box p = 0.83, 0.20 and 0.19).</p>
+<p>No block shows autocorrelation left in the residuals (Ljung-Box p = 0.83, 0.20 and 0.19). Normality, however, is rejected for all three blocks (Jarque-Bera p ≤ 0.001). The non-normality comes from a few extreme quarters, the level shifts detected by X-13 (2000Q4 for rents, 2011Q4 for imported goods, 2023Q1 for domestic goods), which remain in the adjusted series.</p>
 </section>
 <section id="oil-ecm" class="level1">
 <h1>3. Oil ECM</h1>
 <p>The ECM is estimated in two steps (Engle-Granger), on seasonally adjusted oil products. Brent and the USD rate are not seasonal and are used as they are.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: long-run relation</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   oil_t = c + b_brent * brent_t + b_usd * usd_t + zeta * t + z_t</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="co"># The standard errors are not valid here (I(1) regressors); the coefficients</span></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="co"># are, and are estimated very precisely when the variables are cointegrated.</span></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(ecm<span class="sc">$</span>lr)<span class="sc">$</span>coefficients, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: long-run relation</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   oil_t = c + b_brent * brent_t + b_usd * usd_t + zeta * t + z_t</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="co"># The standard errors are not valid here (I(1) regressors); the coefficients</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># are, and are estimated very precisely when the variables are cointegrated.</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(ecm<span class="sc">$</span>lr)<span class="sc">$</span>coefficients, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>            Estimate Std. Error t value Pr(&gt;|t|)
 (Intercept)  249.587      6.660  37.474        0
@@ -2389,10 +2398,10 @@ brent          0.424      0.014  30.997        0
 usd            0.602      0.055  11.017        0
 trend          0.411      0.028  14.916        0</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: short-run dynamics (ECM), one lag of each variable</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   d_oil_t = c + alpha * z_{t-1} + l_b * d_brent_t + l_s * d_usd_t</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="co">#             + phi * d_oil_{t-1} + l_b1 * d_brent_{t-1} + l_s1 * d_usd_{t-1} + e_t</span></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(ecm<span class="sc">$</span>sr)<span class="sc">$</span>coefficients, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: short-run dynamics (ECM), one lag of each variable</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   d_oil_t = c + alpha * z_{t-1} + l_b * d_brent_t + l_s * d_usd_t</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="co">#             + phi * d_oil_{t-1} + l_b1 * d_brent_{t-1} + l_s1 * d_usd_{t-1} + e_t</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="fu">round</span>(<span class="fu">summary</span>(ecm<span class="sc">$</span>sr)<span class="sc">$</span>coefficients, <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>            Estimate Std. Error t value Pr(&gt;|t|)
 (Intercept)    0.355      0.265   1.339    0.184
@@ -2403,77 +2412,88 @@ d_oil_l1       0.152      0.077   1.978    0.051
 d_brent_l1     0.030      0.035   0.845    0.400
 d_usd_l1      -0.042      0.088  -0.485    0.629</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(ecm<span class="sc">$</span>sr)<span class="sc">$</span>r.squared</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(ecm<span class="sc">$</span>sr)<span class="sc">$</span>r.squared</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] 0.8342366</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Residual check of the ECM: H0 = no autocorrelation</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="fu">Box.test</span>(<span class="fu">residuals</span>(ecm<span class="sc">$</span>sr), <span class="at">lag =</span> <span class="dv">8</span>, <span class="at">type =</span> <span class="st">&quot;Ljung-Box&quot;</span>)<span class="sc">$</span>p.value</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Residual checks of the ECM, as for the ARIMA blocks:</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   Ljung-Box (H0 = no autocorrelation) and Jarque-Bera (H0 = normality)</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">ljung_box_p   =</span> <span class="fu">Box.test</span>(<span class="fu">residuals</span>(ecm<span class="sc">$</span>sr), <span class="at">lag =</span> <span class="dv">8</span>, <span class="at">type =</span> <span class="st">&quot;Ljung-Box&quot;</span>)<span class="sc">$</span>p.value,</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">jarque_bera_p =</span> <span class="fu">jarque.bera.test</span>(<span class="fu">residuals</span>(ecm<span class="sc">$</span>sr))<span class="sc">$</span>p.value) <span class="sc">%&gt;%</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[1] 0.4533025</code></pre>
+<pre><code>  ljung_box_p jarque_bera_p 
+        0.453         0.350 </code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>ecm_table <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">equation =</span> <span class="st">&quot;long run&quot;</span>,  <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(ecm<span class="sc">$</span>lr)), <span class="at">estimate =</span> <span class="fu">coef</span>(ecm<span class="sc">$</span>lr)),</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">equation =</span> <span class="st">&quot;short run&quot;</span>, <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(ecm<span class="sc">$</span>sr)), <span class="at">estimate =</span> <span class="fu">coef</span>(ecm<span class="sc">$</span>sr)))</span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(ecm_table, <span class="fu">here</span>(<span class="st">&quot;output&quot;</span>, <span class="st">&quot;estimates_ecm.csv&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>ecm_table <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">equation =</span> <span class="st">&quot;long run&quot;</span>,  <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(ecm<span class="sc">$</span>lr)), <span class="at">estimate =</span> <span class="fu">coef</span>(ecm<span class="sc">$</span>lr)),</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">equation =</span> <span class="st">&quot;short run&quot;</span>, <span class="at">term =</span> <span class="fu">names</span>(<span class="fu">coef</span>(ecm<span class="sc">$</span>sr)), <span class="at">estimate =</span> <span class="fu">coef</span>(ecm<span class="sc">$</span>sr)))</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(ecm_table, <span class="fu">here</span>(<span class="st">&quot;output&quot;</span>, <span class="st">&quot;estimates_ecm.csv&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p><strong>Long run.</strong> Oil product prices rise by 0.42 % when Brent rises by 1 % and by 0.60 % when the franc weakens by 1 % against the USD, plus a trend of 0.41 % per quarter (about 1.6 % per year) for taxes and margins.</p>
-<p><strong>Short run.</strong> The adjustment coefficient α = −0.45 (t = −5.2) is negative and significant: about 45 % of a deviation from the long-run level is corrected each quarter. Within the same quarter, Brent passes 0.30 and the USD rate 0.49. The model explains 83 % of quarterly oil product inflation, and the residuals show no autocorrelation (Ljung-Box p = 0.45).</p>
+<p><strong>Short run.</strong> The adjustment coefficient α = −0.45 (t = −5.2) is negative and significant: about 45 % of a deviation from the long-run level is corrected each quarter. Within the same quarter, Brent passes 0.30 and the USD rate 0.49. The model explains 83 % of quarterly oil product inflation, and the residuals show no autocorrelation (Ljung-Box p = 0.45) and are normal (Jarque-Bera p = 0.35).</p>
+<p>check if ECM is right model for oil</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># The three variables of the oil block</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>oil_vars <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">oil =</span> sa<span class="sc">$</span>oil, <span class="at">brent =</span> q<span class="sc">$</span>y_brent, <span class="at">usd =</span> q<span class="sc">$</span>y_usd)</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 1. Unit roots in levels ---</span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="co"># ADF with constant and trend, lags by BIC. H0 = unit root.</span></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="fu">imap_dfr</span>(oil_vars, <span class="cf">function</span>(x, v) {</span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>  adf <span class="ot">&lt;-</span> <span class="fu">ur.df</span>(x, <span class="at">type =</span> <span class="st">&quot;trend&quot;</span>, <span class="at">lags =</span> <span class="dv">4</span>, <span class="at">selectlags =</span> <span class="st">&quot;BIC&quot;</span>)</span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">variable =</span> v, <span class="at">adf_stat =</span> adf<span class="sc">@</span>teststat[<span class="dv">1</span>], <span class="at">cv_5pct =</span> adf<span class="sc">@</span>cval[<span class="dv">1</span>, <span class="st">&quot;5pct&quot;</span>])</span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">2</span>))) <span class="sc">%&gt;%</span></span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># The three variables of the oil block</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>oil_vars <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">oil =</span> sa<span class="sc">$</span>oil, <span class="at">brent =</span> q<span class="sc">$</span>y_brent, <span class="at">usd =</span> q<span class="sc">$</span>y_usd)</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 1. Unit roots in levels ---</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="co"># ADF with constant and trend, lags by BIC. H0 = unit root.</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="fu">imap_dfr</span>(oil_vars, <span class="cf">function</span>(x, v) {</span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>  adf <span class="ot">&lt;-</span> <span class="fu">ur.df</span>(x, <span class="at">type =</span> <span class="st">&quot;trend&quot;</span>, <span class="at">lags =</span> <span class="dv">4</span>, <span class="at">selectlags =</span> <span class="st">&quot;BIC&quot;</span>)</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">variable =</span> v, <span class="at">adf_stat =</span> adf<span class="sc">@</span>teststat[<span class="dv">1</span>], <span class="at">cv_5pct =</span> adf<span class="sc">@</span>cval[<span class="dv">1</span>, <span class="st">&quot;5pct&quot;</span>])</span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">2</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  variable adf_stat cv_5pct
 1      oil    -3.13   -3.43
 2    brent    -2.64   -3.43
 3      usd    -2.57   -3.43</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 2. Engle-Granger: is the long-run residual stationary? ---</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ADF on the residuals z_t. The critical value is not the usual ADF one:</span></span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="co"># with 2 regressors plus a trend, the 5% value is about -4.10 (MacKinnon 2010).</span></span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>eg <span class="ot">&lt;-</span> <span class="fu">ur.df</span>(ecm<span class="sc">$</span>ect, <span class="at">type =</span> <span class="st">&quot;none&quot;</span>, <span class="at">lags =</span> <span class="dv">4</span>, <span class="at">selectlags =</span> <span class="st">&quot;BIC&quot;</span>)</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">eg_stat =</span> <span class="fu">round</span>(eg<span class="sc">@</span>teststat[<span class="dv">1</span>], <span class="dv">2</span>), <span class="at">cv_5pct =</span> <span class="sc">-</span><span class="fl">4.10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 2. Engle-Granger: is the long-run residual stationary? ---</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ADF on the residuals z_t. The critical value is not the usual ADF one:</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="co"># with 2 regressors plus a trend, the 5% value is about -4.10 (MacKinnon 2010).</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>eg <span class="ot">&lt;-</span> <span class="fu">ur.df</span>(ecm<span class="sc">$</span>ect, <span class="at">type =</span> <span class="st">&quot;none&quot;</span>, <span class="at">lags =</span> <span class="dv">4</span>, <span class="at">selectlags =</span> <span class="st">&quot;BIC&quot;</span>)</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">eg_stat =</span> <span class="fu">round</span>(eg<span class="sc">@</span>teststat[<span class="dv">1</span>], <span class="dv">2</span>), <span class="at">cv_5pct =</span> <span class="sc">-</span><span class="fl">4.10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>eg_stat cv_5pct 
   -5.87   -4.10 </code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 3. Johansen trace test ---</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="co"># r = number of cointegrating relations; reject &quot;r = 0&quot; if stat &gt; critical value.</span></span>
-<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="co"># K = 2 lags in levels, trend in the cointegrating relation.</span></span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>jo <span class="ot">&lt;-</span> <span class="fu">ca.jo</span>(<span class="fu">as.data.frame</span>(oil_vars),</span>
-<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">type =</span> <span class="st">&quot;trace&quot;</span>, <span class="at">ecdet =</span> <span class="st">&quot;trend&quot;</span>, <span class="at">K =</span> <span class="dv">2</span>, <span class="at">spec =</span> <span class="st">&quot;transitory&quot;</span>)</span>
-<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">stat =</span> <span class="fu">round</span>(jo<span class="sc">@</span>teststat, <span class="dv">2</span>), jo<span class="sc">@</span>cval)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 3. Johansen trace test ---</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="co"># r = number of cointegrating relations; reject &quot;r = 0&quot; if stat &gt; critical value.</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co"># K = 2 lags in levels, trend in the cointegrating relation.</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>jo <span class="ot">&lt;-</span> <span class="fu">ca.jo</span>(<span class="fu">as.data.frame</span>(oil_vars),</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">type =</span> <span class="st">&quot;trace&quot;</span>, <span class="at">ecdet =</span> <span class="st">&quot;trend&quot;</span>, <span class="at">K =</span> <span class="dv">2</span>, <span class="at">spec =</span> <span class="st">&quot;transitory&quot;</span>)</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">stat =</span> <span class="fu">round</span>(jo<span class="sc">@</span>teststat, <span class="dv">2</span>), jo<span class="sc">@</span>cval)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>          stat 10pct  5pct  1pct
 r &lt;= 2 |  6.16 10.49 12.25 16.26
 r &lt;= 1 | 17.03 22.76 25.32 30.45
 r = 0  | 44.14 39.06 42.44 48.45</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 4. Weak exogeneity of Brent and USD ---</span></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="co"># The single-equation ECM treats Brent and USD as given. LR test that only</span></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co"># oil products adjust to the long-run gap; H0 = Brent and USD do not adjust.</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>weak_exo <span class="ot">&lt;-</span> <span class="fu">alrtest</span>(jo, <span class="at">A =</span> <span class="fu">matrix</span>(<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">0</span>), <span class="at">nrow =</span> <span class="dv">3</span>), <span class="at">r =</span> <span class="dv">1</span>)</span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">lr_stat =</span> <span class="fu">round</span>(weak_exo<span class="sc">@</span>teststat, <span class="dv">2</span>), <span class="at">p_value =</span> <span class="fu">round</span>(weak_exo<span class="sc">@</span>pval[<span class="dv">1</span>], <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 4. Exogeneity of Brent and USD: loadings of the VECM ---</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="co"># The single-equation ECM treats Brent and USD as given. alpha measures how</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="co"># strongly each variable adjusts to the long-run gap: it should be</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="co"># significant for oil products and not for Brent or USD. H0 = alpha = 0.</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>vecm <span class="ot">&lt;-</span> <span class="fu">cajorls</span>(jo, <span class="at">r =</span> <span class="dv">1</span>)<span class="sc">$</span>rlm</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="fu">map</span>(<span class="fu">summary</span>(vecm), <span class="cf">function</span>(s) s<span class="sc">$</span>coefficients[<span class="st">&quot;ect1&quot;</span>, ]) <span class="sc">%&gt;%</span></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_rows</span>(<span class="at">.id =</span> <span class="st">&quot;equation&quot;</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.double), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>lr_stat p_value 
-  0.300   0.859 </code></pre>
+<pre><code>          equation Estimate Std. Error t value Pr(&gt;|t|)
+1   Response oil.d   -0.447      0.178  -2.510    0.014
+2 Response brent.d   -0.083      0.521  -0.160    0.873
+3   Response usd.d    0.069      0.113   0.607    0.545</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 5. Same long-run effect of Brent and USD? ---</span></span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="co"># If yes, Brent in CHF (brent + usd) would be enough. F-test of the</span></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="co"># restricted model against the unrestricted one; with I(1) regressors, read</span></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="co"># it as indicative only.</span></span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>lr_restricted   <span class="ot">&lt;-</span> <span class="fu">lm</span>(oil <span class="sc">~</span> <span class="fu">I</span>(brent <span class="sc">+</span> usd) <span class="sc">+</span> <span class="fu">seq_along</span>(oil), <span class="at">data =</span> oil_vars)</span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>lr_unrestricted <span class="ot">&lt;-</span> <span class="fu">lm</span>(oil <span class="sc">~</span> brent <span class="sc">+</span> usd <span class="sc">+</span> <span class="fu">seq_along</span>(oil), <span class="at">data =</span> oil_vars)</span>
-<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(lr_restricted, lr_unrestricted)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 5. Same long-run effect of Brent and USD? ---</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="co"># If yes, Brent in CHF (brent + usd) would be enough. F-test of the</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="co"># restricted model against the unrestricted one; with I(1) regressors, read</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="co"># it as indicative only.</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>lr_restricted   <span class="ot">&lt;-</span> <span class="fu">lm</span>(oil <span class="sc">~</span> <span class="fu">I</span>(brent <span class="sc">+</span> usd) <span class="sc">+</span> <span class="fu">seq_along</span>(oil), <span class="at">data =</span> oil_vars)</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>lr_unrestricted <span class="ot">&lt;-</span> <span class="fu">lm</span>(oil <span class="sc">~</span> brent <span class="sc">+</span> usd <span class="sc">+</span> <span class="fu">seq_along</span>(oil), <span class="at">data =</span> oil_vars)</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(lr_restricted, lr_unrestricted)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Analysis of Variance Table
 
@@ -2490,24 +2510,24 @@ Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&
 <ul>
 <li><strong>Unit roots</strong>: oil products, Brent and USD are all non-stationary in levels (ADF −3.13, −2.64 and −2.57, against −3.43).</li>
 <li><strong>Cointegration</strong>: the Engle-Granger test rejects no cointegration (−5.87 vs −4.10). The Johansen test rejects r = 0 (44.14 &gt; 42.44) and does not reject r ≤ 1, so there is exactly one long-run relation.</li>
-<li><strong>Exogeneity</strong>: the restriction that only oil products adjust is not rejected (LR = 0.30, p = 0.86), so estimating a single equation for oil products is justified.</li>
+<li><strong>Weak exogeneity</strong>: in the VECM only oil products adjust to the long-run gap (loading −0.45, p = 0.01); the loadings of Brent (p = 0.87) and USD (p = 0.55) are not significant. Brent and USD are therefore weakly exogenous, and estimating a single equation for oil products is justified.</li>
 <li><strong>Brent vs. USD</strong>: equal elasticities are rejected (F = 15.1, p &lt; 0.001), so the two drivers are kept separately.</li>
 </ul>
 </section>
 <section id="check-of-the-forecast-recursion" class="level1">
 <h1>4. Check of the forecast recursion</h1>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># arima_paths() is our own implementation of the optimal forecast (doc,</span></span>
-<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="co"># section 3.2): future shocks set to zero, past values and shocks kept.</span></span>
-<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="co"># With zero shocks it must give the same point forecast as R&#39;s predict().</span></span>
-<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="fu">imap_dfr</span>(arima_fits, <span class="cf">function</span>(fit, b) {</span>
-<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>  y      <span class="ot">&lt;-</span> sa[[b]]</span>
-<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>  ours   <span class="ot">&lt;-</span> <span class="fu">drop</span>(<span class="fu">arima_paths</span>(fit, y, fcst_horizon))</span>
-<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>  theirs <span class="ot">&lt;-</span> <span class="fu">predict</span>(fit, <span class="at">n.ahead =</span> fcst_horizon,</span>
-<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>                    <span class="at">newxreg =</span> <span class="fu">arima_newxreg</span>(fit, <span class="fu">length</span>(y), fcst_horizon))<span class="sc">$</span>pred</span>
-<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> b, <span class="at">max_difference =</span> <span class="fu">max</span>(<span class="fu">abs</span>(ours <span class="sc">-</span> theirs)))</span>
-<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
-<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># arima_paths() is our own implementation of the optimal forecast (doc,</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="co"># section 3.2): future shocks set to zero, past values and shocks kept.</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a><span class="co"># With zero shocks it must give the same point forecast as R&#39;s predict().</span></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="fu">imap_dfr</span>(arima_fits, <span class="cf">function</span>(fit, b) {</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>  y      <span class="ot">&lt;-</span> sa[[b]]</span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>  ours   <span class="ot">&lt;-</span> <span class="fu">drop</span>(<span class="fu">arima_paths</span>(fit, y, fcst_horizon))</span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>  theirs <span class="ot">&lt;-</span> <span class="fu">predict</span>(fit, <span class="at">n.ahead =</span> fcst_horizon,</span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a>                    <span class="at">newxreg =</span> <span class="fu">arima_newxreg</span>(fit, <span class="fu">length</span>(y), fcst_horizon))<span class="sc">$</span>pred</span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">block =</span> b, <span class="at">max_difference =</span> <span class="fu">max</span>(<span class="fu">abs</span>(ours <span class="sc">-</span> theirs)))</span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>      block max_difference
 1      rent   5.684342e-14
@@ -2520,54 +2540,54 @@ Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&
 <section id="re-aggregation-check" class="level1">
 <h1>5. Re-aggregation check</h1>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Rebuild headline CPI from the four blocks with each year&#39;s weights, linked</span></span>
-<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="co"># at Q4 of the previous year, and compare y-y inflation with the published</span></span>
-<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a><span class="co"># headline. This is the aggregation used for the forecasts in 05.</span></span>
-<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>all_q <span class="ot">&lt;-</span> <span class="fu">load_quarterly</span>(<span class="fu">as.Date</span>(<span class="st">&quot;1987-01-01&quot;</span>))</span>
-<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Ratio of each block to its level in Q4 of the previous year, averaged</span></span>
-<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a><span class="co"># with that year&#39;s weights</span></span>
-<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a>rebuilt <span class="ot">&lt;-</span> all_q <span class="sc">%&gt;%</span></span>
-<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">base_date =</span> <span class="fu">as.Date</span>(<span class="fu">paste0</span>(year <span class="sc">-</span> <span class="dv">1</span>, <span class="st">&quot;-10-01&quot;</span>))) <span class="sc">%&gt;%</span></span>
-<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(all_q <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="at">base_date =</span> date, <span class="at">b_cpi =</span> cpi_total, <span class="at">b_oil =</span> cpi_oil,</span>
-<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a>                             <span class="at">b_rent =</span> cpi_rent, <span class="at">b_imp =</span> cpi_imp_xoil,</span>
-<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a>                             <span class="at">b_dom =</span> cpi_dom_xrent),</span>
-<span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a>            <span class="at">by =</span> <span class="st">&quot;base_date&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb38-14"><a href="#cb38-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">link =</span> (w_oil <span class="sc">*</span> cpi_oil <span class="sc">/</span> b_oil <span class="sc">+</span> w_rent <span class="sc">*</span> cpi_rent <span class="sc">/</span> b_rent <span class="sc">+</span></span>
-<span id="cb38-15"><a href="#cb38-15" aria-hidden="true" tabindex="-1"></a>                 w_imp_xoil <span class="sc">*</span> cpi_imp_xoil <span class="sc">/</span> b_imp <span class="sc">+</span></span>
-<span id="cb38-16"><a href="#cb38-16" aria-hidden="true" tabindex="-1"></a>                 w_dom_xrent <span class="sc">*</span> cpi_dom_xrent <span class="sc">/</span> b_dom) <span class="sc">/</span></span>
-<span id="cb38-17"><a href="#cb38-17" aria-hidden="true" tabindex="-1"></a>                (w_oil <span class="sc">+</span> w_rent <span class="sc">+</span> w_imp_xoil <span class="sc">+</span> w_dom_xrent))</span>
-<span id="cb38-18"><a href="#cb38-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-19"><a href="#cb38-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Chain the links year by year: each Q4 rebuilt level is the base of the</span></span>
-<span id="cb38-20"><a href="#cb38-20" aria-hidden="true" tabindex="-1"></a><span class="co"># following year</span></span>
-<span id="cb38-21"><a href="#cb38-21" aria-hidden="true" tabindex="-1"></a>rebuilt<span class="sc">$</span>cpi_rebuilt <span class="ot">&lt;-</span> <span class="cn">NA_real_</span></span>
-<span id="cb38-22"><a href="#cb38-22" aria-hidden="true" tabindex="-1"></a>first <span class="ot">&lt;-</span> <span class="fu">which</span>(<span class="sc">!</span><span class="fu">is.na</span>(rebuilt<span class="sc">$</span>link))[<span class="dv">1</span>]</span>
-<span id="cb38-23"><a href="#cb38-23" aria-hidden="true" tabindex="-1"></a>rebuilt<span class="sc">$</span>cpi_rebuilt[first <span class="sc">-</span> <span class="dv">1</span>] <span class="ot">&lt;-</span> rebuilt<span class="sc">$</span>cpi_total[first <span class="sc">-</span> <span class="dv">1</span>]</span>
-<span id="cb38-24"><a href="#cb38-24" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> first<span class="sc">:</span><span class="fu">nrow</span>(rebuilt)) {</span>
-<span id="cb38-25"><a href="#cb38-25" aria-hidden="true" tabindex="-1"></a>  base_i <span class="ot">&lt;-</span> <span class="fu">match</span>(rebuilt<span class="sc">$</span>base_date[i], rebuilt<span class="sc">$</span>date)</span>
-<span id="cb38-26"><a href="#cb38-26" aria-hidden="true" tabindex="-1"></a>  rebuilt<span class="sc">$</span>cpi_rebuilt[i] <span class="ot">&lt;-</span> rebuilt<span class="sc">$</span>cpi_rebuilt[base_i] <span class="sc">*</span> rebuilt<span class="sc">$</span>link[i]</span>
-<span id="cb38-27"><a href="#cb38-27" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb38-28"><a href="#cb38-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-29"><a href="#cb38-29" aria-hidden="true" tabindex="-1"></a><span class="co"># y-y inflation, published vs rebuilt</span></span>
-<span id="cb38-30"><a href="#cb38-30" aria-hidden="true" tabindex="-1"></a>reagg <span class="ot">&lt;-</span> rebuilt <span class="sc">%&gt;%</span></span>
-<span id="cb38-31"><a href="#cb38-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pi_published =</span> <span class="fu">log100</span>(cpi_total <span class="sc">/</span> <span class="fu">lag</span>(cpi_total, <span class="dv">4</span>)),</span>
-<span id="cb38-32"><a href="#cb38-32" aria-hidden="true" tabindex="-1"></a>         <span class="at">pi_rebuilt   =</span> <span class="fu">log100</span>(cpi_rebuilt <span class="sc">/</span> <span class="fu">lag</span>(cpi_rebuilt, <span class="dv">4</span>)),</span>
-<span id="cb38-33"><a href="#cb38-33" aria-hidden="true" tabindex="-1"></a>         <span class="at">gap_pp       =</span> pi_rebuilt <span class="sc">-</span> pi_published) <span class="sc">%&gt;%</span></span>
-<span id="cb38-34"><a href="#cb38-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date <span class="sc">&gt;=</span> start_estimation) <span class="sc">%&gt;%</span></span>
-<span id="cb38-35"><a href="#cb38-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(date, pi_published, pi_rebuilt, gap_pp)</span>
-<span id="cb38-36"><a href="#cb38-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-37"><a href="#cb38-37" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">max_abs_gap_pp  =</span> <span class="fu">round</span>(<span class="fu">max</span>(<span class="fu">abs</span>(reagg<span class="sc">$</span>gap_pp)), <span class="dv">3</span>),</span>
-<span id="cb38-38"><a href="#cb38-38" aria-hidden="true" tabindex="-1"></a>  <span class="at">mean_abs_gap_pp =</span> <span class="fu">round</span>(<span class="fu">mean</span>(<span class="fu">abs</span>(reagg<span class="sc">$</span>gap_pp)), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Rebuild headline CPI from the four blocks with each year&#39;s weights, linked</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a><span class="co"># at Q4 of the previous year, and compare y-y inflation with the published</span></span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a><span class="co"># headline. This is the aggregation used for the forecasts in 05.</span></span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>all_q <span class="ot">&lt;-</span> <span class="fu">load_quarterly</span>(<span class="fu">as.Date</span>(<span class="st">&quot;1987-01-01&quot;</span>))</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Ratio of each block to its level in Q4 of the previous year, averaged</span></span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a><span class="co"># with that year&#39;s weights</span></span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>rebuilt <span class="ot">&lt;-</span> all_q <span class="sc">%&gt;%</span></span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">base_date =</span> <span class="fu">as.Date</span>(<span class="fu">paste0</span>(year <span class="sc">-</span> <span class="dv">1</span>, <span class="st">&quot;-10-01&quot;</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(all_q <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="at">base_date =</span> date, <span class="at">b_cpi =</span> cpi_total, <span class="at">b_oil =</span> cpi_oil,</span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a>                             <span class="at">b_rent =</span> cpi_rent, <span class="at">b_imp =</span> cpi_imp_xoil,</span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a>                             <span class="at">b_dom =</span> cpi_dom_xrent),</span>
+<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a>            <span class="at">by =</span> <span class="st">&quot;base_date&quot;</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">link =</span> (w_oil <span class="sc">*</span> cpi_oil <span class="sc">/</span> b_oil <span class="sc">+</span> w_rent <span class="sc">*</span> cpi_rent <span class="sc">/</span> b_rent <span class="sc">+</span></span>
+<span id="cb40-15"><a href="#cb40-15" aria-hidden="true" tabindex="-1"></a>                 w_imp_xoil <span class="sc">*</span> cpi_imp_xoil <span class="sc">/</span> b_imp <span class="sc">+</span></span>
+<span id="cb40-16"><a href="#cb40-16" aria-hidden="true" tabindex="-1"></a>                 w_dom_xrent <span class="sc">*</span> cpi_dom_xrent <span class="sc">/</span> b_dom) <span class="sc">/</span></span>
+<span id="cb40-17"><a href="#cb40-17" aria-hidden="true" tabindex="-1"></a>                (w_oil <span class="sc">+</span> w_rent <span class="sc">+</span> w_imp_xoil <span class="sc">+</span> w_dom_xrent))</span>
+<span id="cb40-18"><a href="#cb40-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-19"><a href="#cb40-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Chain the links year by year: each Q4 rebuilt level is the base of the</span></span>
+<span id="cb40-20"><a href="#cb40-20" aria-hidden="true" tabindex="-1"></a><span class="co"># following year</span></span>
+<span id="cb40-21"><a href="#cb40-21" aria-hidden="true" tabindex="-1"></a>rebuilt<span class="sc">$</span>cpi_rebuilt <span class="ot">&lt;-</span> <span class="cn">NA_real_</span></span>
+<span id="cb40-22"><a href="#cb40-22" aria-hidden="true" tabindex="-1"></a>first <span class="ot">&lt;-</span> <span class="fu">which</span>(<span class="sc">!</span><span class="fu">is.na</span>(rebuilt<span class="sc">$</span>link))[<span class="dv">1</span>]</span>
+<span id="cb40-23"><a href="#cb40-23" aria-hidden="true" tabindex="-1"></a>rebuilt<span class="sc">$</span>cpi_rebuilt[first <span class="sc">-</span> <span class="dv">1</span>] <span class="ot">&lt;-</span> rebuilt<span class="sc">$</span>cpi_total[first <span class="sc">-</span> <span class="dv">1</span>]</span>
+<span id="cb40-24"><a href="#cb40-24" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> first<span class="sc">:</span><span class="fu">nrow</span>(rebuilt)) {</span>
+<span id="cb40-25"><a href="#cb40-25" aria-hidden="true" tabindex="-1"></a>  base_i <span class="ot">&lt;-</span> <span class="fu">match</span>(rebuilt<span class="sc">$</span>base_date[i], rebuilt<span class="sc">$</span>date)</span>
+<span id="cb40-26"><a href="#cb40-26" aria-hidden="true" tabindex="-1"></a>  rebuilt<span class="sc">$</span>cpi_rebuilt[i] <span class="ot">&lt;-</span> rebuilt<span class="sc">$</span>cpi_rebuilt[base_i] <span class="sc">*</span> rebuilt<span class="sc">$</span>link[i]</span>
+<span id="cb40-27"><a href="#cb40-27" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb40-28"><a href="#cb40-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-29"><a href="#cb40-29" aria-hidden="true" tabindex="-1"></a><span class="co"># y-y inflation, published vs rebuilt</span></span>
+<span id="cb40-30"><a href="#cb40-30" aria-hidden="true" tabindex="-1"></a>reagg <span class="ot">&lt;-</span> rebuilt <span class="sc">%&gt;%</span></span>
+<span id="cb40-31"><a href="#cb40-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pi_published =</span> <span class="fu">log100</span>(cpi_total <span class="sc">/</span> <span class="fu">lag</span>(cpi_total, <span class="dv">4</span>)),</span>
+<span id="cb40-32"><a href="#cb40-32" aria-hidden="true" tabindex="-1"></a>         <span class="at">pi_rebuilt   =</span> <span class="fu">log100</span>(cpi_rebuilt <span class="sc">/</span> <span class="fu">lag</span>(cpi_rebuilt, <span class="dv">4</span>)),</span>
+<span id="cb40-33"><a href="#cb40-33" aria-hidden="true" tabindex="-1"></a>         <span class="at">gap_pp       =</span> pi_rebuilt <span class="sc">-</span> pi_published) <span class="sc">%&gt;%</span></span>
+<span id="cb40-34"><a href="#cb40-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date <span class="sc">&gt;=</span> start_estimation) <span class="sc">%&gt;%</span></span>
+<span id="cb40-35"><a href="#cb40-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(date, pi_published, pi_rebuilt, gap_pp)</span>
+<span id="cb40-36"><a href="#cb40-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-37"><a href="#cb40-37" aria-hidden="true" tabindex="-1"></a><span class="fu">c</span>(<span class="at">max_abs_gap_pp  =</span> <span class="fu">round</span>(<span class="fu">max</span>(<span class="fu">abs</span>(reagg<span class="sc">$</span>gap_pp)), <span class="dv">3</span>),</span>
+<span id="cb40-38"><a href="#cb40-38" aria-hidden="true" tabindex="-1"></a>  <span class="at">mean_abs_gap_pp =</span> <span class="fu">round</span>(<span class="fu">mean</span>(<span class="fu">abs</span>(reagg<span class="sc">$</span>gap_pp)), <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code> max_abs_gap_pp mean_abs_gap_pp 
           0.136           0.016 </code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>reagg <span class="sc">%&gt;%</span></span>
-<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">c</span>(pi_published, pi_rebuilt), <span class="at">names_to =</span> <span class="st">&quot;series&quot;</span>, <span class="at">values_to =</span> <span class="st">&quot;yoy&quot;</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(date, yoy, <span class="at">colour =</span> series, <span class="at">linetype =</span> series)) <span class="sc">+</span></span>
-<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
-<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Headline y-o-y inflation: published vs rebuilt from the 4 blocks, in %&quot;</span>,</span>
-<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">colour =</span> <span class="cn">NULL</span>, <span class="at">linetype =</span> <span class="cn">NULL</span>, <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="cn">NULL</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>reagg <span class="sc">%&gt;%</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">c</span>(pi_published, pi_rebuilt), <span class="at">names_to =</span> <span class="st">&quot;series&quot;</span>, <span class="at">values_to =</span> <span class="st">&quot;yoy&quot;</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(date, yoy, <span class="at">colour =</span> series, <span class="at">linetype =</span> series)) <span class="sc">+</span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Headline y-o-y inflation: published vs rebuilt from the 4 blocks, in %&quot;</span>,</span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">colour =</span> <span class="cn">NULL</span>, <span class="at">linetype =</span> <span class="cn">NULL</span>, <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="cn">NULL</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -2575,7 +2595,7 @@ Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&
 </figure>
 </div>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(reagg, <span class="fu">here</span>(<span class="st">&quot;output&quot;</span>, <span class="st">&quot;reaggregation_check.csv&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(reagg, <span class="fu">here</span>(<span class="st">&quot;output&quot;</span>, <span class="st">&quot;reaggregation_check.csv&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>The four blocks rebuild headline inflation almost exactly: the average gap is 0.016 percentage points and the largest 0.14 pp (2009Q3). The small gap comes from linking at the Q4 average instead of December and from rounding in the published indices. Forecasting the four blocks and aggregating them with the CPI weights therefore gives a valid forecast of headline inflation.</p>
 </section>

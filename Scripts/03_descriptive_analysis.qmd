@@ -350,7 +350,7 @@ fit_grid <- function(y, xreg = NULL) {
     fit <- tryCatch(Arima(y, order = c(p, 1, q), include.drift = TRUE, xreg = xreg),
                     error = function(e) NULL)
     if (is.null(fit)) return(NULL)
-    tibble(p = p, q = q, aicc = fit$aicc, bic = fit$bic,
+    tibble(p = p, q = q, aic = fit$aic, bic = fit$bic,
            # Ljung-Box on residuals, 8 lags (2 years): H0 = no autocorrelation
            lb_p = Box.test(residuals(fit), lag = 8, type = "Ljung-Box",
                            fitdf = p + q)$p.value)
@@ -365,7 +365,7 @@ arima_grid <- imap(arima_vars, \(v, b) fit_grid(to_ts(sample_2000[[v]]), block_x
 arima_grid %>%
   group_by(block) %>%
   slice_min(bic, n = 3) %>%
-  mutate(across(c(aicc, bic, lb_p), ~ round(.x, 3))) %>%
+  mutate(across(c(aic, bic, lb_p), ~ round(.x, 3))) %>%
   as.data.frame()
 ```
 
@@ -384,7 +384,7 @@ best_fits <- imap(arima_orders, \(ord, b)
         xreg = block_xreg[[b]]))
 ```
 
-We select the model with the lowest BIC, which penalises additional parameters more than the AICc and therefore favours parsimonious models, and check the residuals with a Ljung-Box test.
+We select the model with the lowest BIC, which penalises additional parameters more than the AIC and therefore favours parsimonious models, and check the residuals with a Ljung-Box test.
 
 **Rents: ARIMA(3,1,0) with drift.** All coefficients are significant and the residuals show no autocorrelation (Ljung-Box p = 0.83). The three AR terms describe the slow, cyclical adjustment of rents, in line with yearly adjustments after reference-rate changes. The drift of 0.36 % per quarter (t = 5.4) implies long-run rent inflation of about 1.4 % per year.
 
@@ -456,14 +456,15 @@ The trace test rejects r = 0 at 5 % (44.14 \> 42.44) and does not reject r ≤ 1
 
 ```{r}
 # The single-equation ECM treats Brent and USD as given. Two checks:
-# (a) Weak exogeneity: in the Johansen VECM, Brent and USD do not adjust to
-#     the long-run gap (alpha_brent = alpha_usd = 0). LR test of this
-#     restriction; H0 = only oil products adjust.
-weak_exo <- alrtest(johansen, A = matrix(c(1, 0, 0), nrow = 3), r = 1)
-c(lr_stat = round(weak_exo@teststat, 2), p_value = round(weak_exo@pval[1], 3))
-
-# Adjustment coefficients (alpha) of each variable in the VECM
-round(cajorls(johansen, r = 1)$rlm$coefficients["ect1", ], 3)
+# (a) Loadings of the VECM: alpha measures how strongly each variable
+#     adjusts to the long-run gap. Only oil products should adjust, i.e.
+#     alpha should be significant for oil and not for Brent or USD.
+#     H0 (per equation) = alpha = 0.
+vecm <- cajorls(johansen, r = 1)$rlm
+map(summary(vecm), \(s) s$coefficients["ect1", ]) %>%
+  bind_rows(.id = "equation") %>%
+  mutate(across(where(is.double), ~ round(.x, 3))) %>%
+  as.data.frame()
 
 # (b) No feedback: past changes in oil product prices do not help predict
 #     Brent or USD (Granger causality, 4 lags = one year).
@@ -479,7 +480,7 @@ tibble(driver  = c("Brent", "USD"),
 
 The single-equation ECM assumes that the drivers do not depend on Swiss oil product prices. Both checks support this:
 
-- Weak exogeneity: in the Johansen VECM, the restriction that only oil products adjust to the long-run gap is not rejected (LR = 0.30, p = 0.86). The adjustment coefficients are −0.45 for oil products, against −0.08 for Brent and 0.07 for USD.
+- Weak exogeneity: in the Johansen VECM, only oil products adjust to the long-run gap. Their loading is −0.45 and significant (t = −2.5, p = 0.01), while the loadings of Brent (−0.08, p = 0.87) and USD (0.07, p = 0.55) are close to zero and not significant. Brent and USD therefore do not react to deviations from the long-run relation: they are weakly exogenous.
 - No feedback: past oil product inflation does not Granger-cause Brent (p = 0.33) or USD (p = 0.26).
 
 We therefore treat Brent and USD as exogenous and estimate a single equation for oil products. The VECM adjustment coefficient of oil products (−0.45) is also very close to the one of the ECM below.

@@ -7,3 +7,4 @@
 "seco_qna_p_cssa.xlsx","SECO qna_p_cssa","https://www.seco.admin.ch/dam/en/sd-web/ov1gH4D7B7tT/qna_p_cssa.xlsx","2026-10-19 14:53"
 "snb_fx_devkum.csv","SNB devkum","https://data.snb.ch/api/cube/devkum/data/csv/en?fromDate=1987-08&dimSel=D0(M0),D1(EUR1,USD1)","2026-10-19 15:03"
 "snb_policy_rates_snboffzisa.csv","SNB snboffzisa","https://data.snb.ch/api/cube/snboffzisa/data/csv/en?fromDate=2000-01&dimSel=D0(LZ,UG0,OG0,UG1,OG1,H,SRF,EF,L0,L1)","2026-10-20 20:00"
+"snb_variable_mortgage_zikrepro.csv","SNB zikrepro","https://data.snb.ch/api/cube/zikrepro/data/csv/en?fromDate=1980-01&dimSel=D0(M),D1(MV)","2026-11-24 23:48"
