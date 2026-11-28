@@ -1,5 +1,5 @@
 # Télécharge et installe sur ton Mac les 4 boîtes à outils dont on aura besoin ce soir.
-install.packages(c("here", "tidyverse", "seasonal", "tseries"))
+#install.packages(c("here", "tidyverse", "seasonal", "tseries"))
 
 
 # Ouvre le package qui construit les chemins à partir de la racine du projet.
@@ -128,6 +128,14 @@ n <- length(adj_rent$sa)
 pi_fc <- y_all[n + 1:12] - y_all[n + 1:12 - 4]
 
 ##les poids
+# Récupère les 3 coefficients AR du modèle des loyers corrigé (ar1, ar2, ar3).
+phi <- coef(fit_rent2)[c("ar1", "ar2", "ar3")]
+# Poids psi de départ : trois 0 « avant le début », puis psi_0 = 1.
+psi <- c(0, 0, 0, 1)
+# Boucle du cours : chaque psi_j = ar1 × psi_(j-1) + ar2 × psi_(j-2) + ar3 × psi_(j-3), jusqu'à psi_11.
+for (j in 5:15) psi[j] <- sum(phi * psi[j - 1:3])
+# Garde seulement psi_0 à psi_11 (12 poids), sans les trois 0 de départ.
+psi <- psi[4:15]
 # Poids d'un choc sur l'inflation annuelle : somme des 4 derniers psi (une inflation annuelle = 4 croissances trimestrielles).
 c_w <- sapply(1:12, function(j) sum(psi[max(1, j - 3):j]))
 # Variance de l'erreur de prévision pour h = 1 à 12 : sigma² × somme cumulée des poids au carré (formule du cours).
@@ -276,8 +284,8 @@ tseries::jarque.bera.test(chocs[!krach, "brent"])$p.value
 # Écart-type des chocs du Brent avec et sans les krachs (en points de % par trimestre) : combien l'incertitude baisse-t-elle ?
 
 ##tirer 5 000 scénarios de chocs corrélés
-# Matrice de covariance Sigma des 3 chocs (pétrole, Brent, CHF/USD), calculée sans les deux krachs du Brent.
-Sigma <- cov(chocs[!krach, ])
+# Matrice de covariance Sigma des 3 chocs (pétrole, Brent, CHF/USD), calculée sur tous les trimestres, krachs compris.
+Sigma <- cov(chocs)
 # Fixe la graine du hasard, pour des résultats reproductibles.
 set.seed(2026)
 # Nombre de futurs simulés.
@@ -316,6 +324,7 @@ o_hist <- oil_pt[(n - 11):n] - oil_pt[(n - 15):(n - 4)]
 
 # Trace historique + prévision ponctuelle du pétrole ; l'échelle verticale couvre aussi les bornes simulées.
 plot(c(q$date[(n - 11):n], fc_dates), c(o_hist, o_pt), type = "l", lwd = 2, ylim = range(c(o_hist, o_low, o_up)), main = "Produits pétroliers", xlab = "", ylab = "Inflation sur un an (%)")
+
 # Zone de l'intervalle à 90 % (bornes 5 % et 95 % des 5000 futurs), en bleu transparent.
 polygon(c(fc_dates, rev(fc_dates)), c(o_low, rev(o_up)), col = rgb(0, 0, 1, 0.2), border = NA)
 # Ligne pointillée qui sépare historique et prévision.
@@ -327,18 +336,18 @@ par(mfrow = c(1, 1))
 ##chocs et leurs corrélations
 # Tableau des 6 chocs sur les mêmes trimestres : résidus des 3 blocs ARIMA corrigés + les 3 chocs du pétrole (ECM, Brent, CHF/USD).
 chocs6 <- cbind(rent = tail(as.numeric(residuals(fit_rent2)), length(e_oil)), imp = tail(as.numeric(residuals(fit_imp2)), length(e_oil)), dom = tail(as.numeric(residuals(fit_dom2)), length(e_oil)), chocs)
-# Corrélations entre les 6 chocs, sans les deux krachs du Brent : les blocs sont-ils liés entre eux ?
-round(cor(chocs6[!krach, ]), 2)
+# Corrélations entre les 6 chocs, sur tous les trimestres (krachs du Brent compris, décision du prof).
+round(cor(chocs6), 2)
 
 ##tirer 5 000 futurs de 6 chocs corrélés
-# Matrice de covariance des 6 chocs (sans les krachs du Brent).
-Sigma6 <- cov(chocs6[!krach, ])
+# Matrice de covariance des 6 chocs, sur tous les trimestres.
+Sigma6 <- cov(chocs6)
 # Graine du hasard, pour des résultats reproductibles.
 set.seed(2026)
 # Tire 12 x N groupes de 6 chocs normaux corrélés (colonnes : loyers, importé, domestique, pétrole, Brent, CHF/USD).
 Z6 <- matrix(rnorm(12 * N * 6), 12 * N, 6) %*% chol(Sigma6)
 
-##trajectoires des loyers, du domestique et préparation de l’importé
+##trajectoires des loyers, du domestique et de l'importé
 # Loyers : 5000 trajectoires du niveau (log x 100) avec la boucle de l'équipe et les chocs de la colonne 1.
 rent6 <- arima_paths(fit_rent2, adj_rent$sa, 12, shocks = matrix(Z6[, 1], 12, N)) + adj_rent$sf_fc
 # Domestique : même chose avec les chocs de la colonne 3, puis on rajoute la saisonnalité X-13.
@@ -347,21 +356,21 @@ dom6 <- arima_paths(fit_dom2, fits$adj$dom_xrent$sa, 12, shocks = matrix(Z6[, 3]
 E_i <- rbind(matrix(e_i[n - 1], 1, N), matrix(e_i[n], 1, N), matrix(Z6[, 2], 12, N))
 # Importé : croissance = drift + choc du trimestre + ma1 × choc d'avant + ma2 × choc d'il y a 2 trimestres (le MA(2) écrit à la main).
 dyi6 <- coef(fit_imp2)["drift"] + E_i[3:14, ] + th_i[1] * E_i[2:13, ] + th_i[2] * E_i[1:12, ]
-
-##trajectoires de l’importé et du pétrole
-
 # Importé : niveau = dernier niveau désaisonnalisé + croissances cumulées, puis on rajoute la saisonnalité X-13.
 imp6 <- tail(fits$adj$imp_xoil$sa, 1) + apply(dyi6, 2, cumsum) + fits$adj$imp_xoil$sf_fc
-# Brent et CHF/USD en marche aléatoire, avec les chocs des colonnes 5 et 6.
+
+##trajectoires du pétrole
+# Brent en marche aléatoire, avec les chocs de la colonne 5.
 br6 <- tail(q$y_brent, 1) + apply(matrix(Z6[, 5], 12, N), 2, cumsum)
+# CHF/USD en marche aléatoire, avec les chocs de la colonne 6.
 us6 <- tail(q$y_usd, 1) + apply(matrix(Z6[, 6], 12, N), 2, cumsum)
 # Pétrole : l'ECM de l'équipe avec ces trajectoires et les chocs de la colonne 4, puis la saisonnalité X-13.
 oil6 <- ecm_paths(fits$ecm, 12, br6, us6, shocks = matrix(Z6[, 4], 12, N)) + fits$adj$oil$sf_fc
 
-##l’inflation totale, avant et après
+##l'inflation totale
 # Agrège les 4 blocs en inflation totale sur un an, futur par futur, avec la fonction de l'équipe et les poids du panier.
 pi_head <- aggregate_headline(q, fc_dates, list(oil = oil6, rent = rent6, imp_xoil = imp6, dom_xrent = dom6), latest_weights(q))
-# Charge les résultats bootstrap de l'équipe : c'est l'« avant ».
-boot <- read.csv(here("output", "forecast_headline.csv"))
-# Tableau avant / après : bornes 5 %, médiane et 95 % gaussiennes (g), puis celles du bootstrap de l'équipe (b).
+# Tableau final : horizon, borne 5 %, médiane et borne 95 % de l'inflation totale sur un an (densité gaussienne).
+round(cbind(h = 1:12, q5 = apply(pi_head, 1, quantile, 0.05), q50 = apply(pi_head, 1, median), q95 = apply(pi_head, 1, quantile, 0.95)), 2)
+round(cbind(h = 1:12, q5 = apply(pi_head, 1, quantile, 0.05), q50 = apply(pi_head, 1, median), q95 = apply(pi_head, 1, quantile, 0.95)), 2)
 round(cbind(h = 1:12, g5 = apply(pi_head, 1, quantile, 0.05), g50 = apply(pi_head, 1, median), g95 = apply(pi_head, 1, quantile, 0.95), b5 = boot$q5, b50 = boot$q50, b95 = boot$q95), 2)
